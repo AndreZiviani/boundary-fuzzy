@@ -83,7 +83,12 @@ func newTargetDelegate(model *mainModel) list.DefaultDelegate {
 						return tea.Sequence(
 							tea.ExecProcess(
 								cmd,
-								func(err error) tea.Msg { return execErrorMsg{err} },
+								func(err error) tea.Msg {
+									if err != nil {
+										return execErrorMsg{err}
+									}
+									return nil
+								},
 							),
 							func() tea.Msg { return terminateSessionMsg{i} },
 						)
