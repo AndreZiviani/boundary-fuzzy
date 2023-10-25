@@ -131,16 +131,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.message = msg.Error()
 		return m, cmd
 	case terminateSessionMsg:
-		res, cmd := m.targets.Update(msg)
-		m.targets = res
-		cmds = append(cmds, cmd)
-
-		res, cmd = m.connected.Update(msg)
-		m.connected = res
-		cmds = append(cmds, cmd)
-
 		TerminateSession(m.boundaryClient, msg.sessionID, msg.task)
-		return m, cmd
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height

@@ -95,6 +95,7 @@ func ConnectToTarget(target Target) (*run.Task, *exec.Cmd, string, error) {
 }
 
 func TerminateSession(boundaryClient *api.Client, sessionID string, task *run.Task) {
+	task.Cancel()
 	sessionClient := sessions.NewClient(boundaryClient)
 
 	session, err := sessionClient.Read(context.TODO(), sessionID)
@@ -104,6 +105,5 @@ func TerminateSession(boundaryClient *api.Client, sessionID string, task *run.Ta
 
 	sessionClient.Cancel(context.TODO(), sessionID, session.Item.Version)
 
-	task.Cancel()
 	task.Cmd.Wait()
 }
