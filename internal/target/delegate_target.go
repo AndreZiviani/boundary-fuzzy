@@ -10,6 +10,10 @@ type connectMsg struct {
 	Target
 }
 
+type execErrorMsg struct {
+	error
+}
+
 type terminateSessionMsg struct {
 	Target
 }
@@ -78,7 +82,8 @@ func newTargetDelegate(model *mainModel) list.DefaultDelegate {
 					} else {
 						return tea.Sequence(
 							tea.ExecProcess(
-								cmd, nil,
+								cmd,
+								func(err error) tea.Msg { return execErrorMsg{err} },
 							),
 							func() tea.Msg { return terminateSessionMsg{i} },
 						)

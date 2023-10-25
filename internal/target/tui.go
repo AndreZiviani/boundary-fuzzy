@@ -34,6 +34,9 @@ var (
 
 	alertViewStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("170"))
 	choiceStyle    = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("241"))
+	errorStyle     = lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#cc0000", Dark: "#cc0000"}).
+			Render
 )
 
 func NewConnect() *Connect {
@@ -71,6 +74,7 @@ type mainModel struct {
 	height     int
 	quitting   bool
 	shouldQuit bool
+	message    string
 }
 
 func newModel(boundaryClient *api.Client) mainModel {
@@ -95,6 +99,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
+	if len(m.message) > 0 {
+		return m.messageUpdate(msg)
+	}
 	if m.quitting {
 		return m.quittingUpdate(msg)
 	}
@@ -119,6 +126,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case connectMsg:
 		res, cmd := m.connected.Update(msg)
 		m.connected = res
+		return m, cmd
+	case execErrorMsg:
+		m.message = msg.Error()
 		return m, cmd
 	case terminateSessionMsg:
 		res, cmd := m.targets.Update(msg)
@@ -152,6 +162,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m mainModel) View() string {
+	if len(m.message) > 0 {
+		text := alertViewStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, fmt.Sprintf("Failed to open shell: \n%s\n\nPress any key to return", errorStyle(m.message))))
+		return lipgloss.NewStyle().Padding((m.height/2)-1, (m.width-lipgloss.Width(text))/2).Render(text)
+	}
+
 	if m.quitting {
 		if len(m.connected.Items()) > 0 {
 			text := alertViewStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, fmt.Sprintf("You have %d active session(s), terminate every session and quit?", len(m.connected.Items())), choiceStyle.Render("[y/N]")))
@@ -174,6 +189,14 @@ func (m mainModel) View() string {
 			focusedModelStyle.Render(m.connected.View()),
 		)
 	}
+}
+
+func (m mainModel) messageUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case tea.KeyMsg:
+		m.message = ""
+	}
+	return m, nil
 }
 
 func (m mainModel) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
