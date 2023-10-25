@@ -24,7 +24,7 @@ func NewBoundaryClient() (*api.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	boundaryClient.SetToken(boundaryToken.Token)
+	boundaryClient.SetToken(boundaryToken)
 
 	return boundaryClient, nil
 }

@@ -26,22 +26,27 @@ const (
 	LoginCollection  = "login"
 	PassPrefix       = "HashiCorp_Boundary"
 
+	EnvToken        = "BOUNDARY_TOKEN"
 	EnvTokenName    = "BOUNDARY_TOKEN_NAME"
 	EnvKeyringType  = "BOUNDARY_KEYRING_TYPE"
 	StoredTokenName = "HashiCorp Boundary Auth Token"
 )
 
-func getBoundaryToken() (*authtokens.AuthToken, error) {
-	keyringType, tokenName, err := discoverKeyringTokenInfo()
-	if err != nil {
-		return nil, err
+func getBoundaryToken() (string, error) {
+	token := os.Getenv(EnvToken)
+	if len(token) == 0 {
+		keyringType, tokenName, err := discoverKeyringTokenInfo()
+		if err != nil {
+			return "", err
+		}
+		authToken, err := readTokenFromKeyring(keyringType, tokenName)
+		if err != nil {
+			return "", err
+		}
+		return authToken.Token, nil
+	} else {
+		return token, nil
 	}
-	authToken, err := readTokenFromKeyring(keyringType, tokenName)
-	if err != nil {
-		return nil, err
-	}
-
-	return authToken, nil
 }
 
 func discoverKeyringTokenInfo() (string, string, error) {
