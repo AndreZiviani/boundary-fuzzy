@@ -107,6 +107,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Don't match any of the keys below if we're actively filtering.
+		if m.connected.FilterState() == list.Filtering || m.targets.FilterState() == list.Filtering {
+			break
+		}
 		switch msg.String() {
 		case "esc":
 			return m, nil
