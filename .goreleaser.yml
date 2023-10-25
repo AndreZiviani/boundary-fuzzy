@@ -1,0 +1,66 @@
+# This is an example .goreleaser.yml file with some sane defaults.
+# Make sure to check the documentation at http://goreleaser.com
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod download
+builds:
+  - id: "linux"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - 6
+      - 7
+    main: ./cmd/boundary-fuzzy/main.go
+  - id: "windows"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+    main: ./cmd/boundary-fuzzy/main.go
+  - id: "macos"
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    main: ./cmd/boundary-fuzzy/main.go
+    flags: -buildmode=pie
+    overrides:
+      - goos: darwin
+        goarch: amd64
+        goamd64: v1
+        env:
+          - CGO_LDFLAGS=-mmacosx-version-min=10.14 --sysroot /home/runner/work/boundary-fuzzy/sdk -F/System/Library/Frameworks -L/usr/lib
+          - CC=zig cc -target x86_64-macos-gnu -isysroot /home/runner/work/boundary-fuzzy/sdk -iwithsysroot /usr/include -iframeworkwithsysroot /System/Library/Frameworks
+          - CXX=zig c++ -target x86_64-macos-gnu -isysroot /home/runner/work/boundary-fuzzy/sdk -iwithsysroot /usr/include -iframeworkwithsysroot /System/Library/Frameworks
+      - goos: darwin
+        goarch: arm64
+        env:
+          - CGO_LDFLAGS=-mmacosx-version-min=11.1 --sysroot /home/runner/work/boundary-fuzzy/sdk -F/System/Library/Frameworks -L/usr/lib
+          - CC=zig cc -target aarch64-macos-gnu -isysroot /home/runner/work/boundary-fuzzy/sdk -iwithsysroot /usr/include -iframeworkwithsysroot /System/Library/Frameworks
+          - CXX=zig c++ -target aarch64-macos-gnu -isysroot /home/runner/work/boundary-fuzzy/sdk -iwithsysroot /usr/include -iframeworkwithsysroot /System/Library/Frameworks
+archives:
+  - format: binary
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+release:
+  prerelease: auto
