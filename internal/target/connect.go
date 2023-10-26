@@ -25,7 +25,7 @@ type SessionInfo struct {
 	Credentials     []*targets.SessionCredential `json:"credentials,omitempty"`
 }
 
-func ConnectToTarget(target Target) (*run.Task, *exec.Cmd, string, error) {
+func ConnectToTarget(target *Target) (*run.Task, *exec.Cmd, *SessionInfo, error) {
 	task := run.RunTask("boundary", []string{"connect", "-target-id", target.target.Id, "-format", "json"})
 
 	task.Output.Scan()
@@ -33,7 +33,7 @@ func ConnectToTarget(target Target) (*run.Task, *exec.Cmd, string, error) {
 	var session SessionInfo
 	err := json.Unmarshal(task.Output.Bytes(), &session)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, nil, err
 	}
 
 	var cmd *exec.Cmd
@@ -91,19 +91,19 @@ func ConnectToTarget(target Target) (*run.Task, *exec.Cmd, string, error) {
 		}
 	}
 
-	return task, cmd, session.SessionId, nil
+	return task, cmd, &session, nil
 }
 
-func TerminateSession(boundaryClient *api.Client, sessionID string, task *run.Task) {
+func TerminateSession(boundaryClient *api.Client, session *SessionInfo, task *run.Task) {
 	task.Cancel()
 	sessionClient := sessions.NewClient(boundaryClient)
 
-	session, err := sessionClient.Read(context.TODO(), sessionID)
+	sessionInfo, err := sessionClient.Read(context.TODO(), session.SessionId)
 	if err != nil {
 		return
 	}
 
-	sessionClient.Cancel(context.TODO(), sessionID, session.Item.Version)
+	sessionClient.Cancel(context.TODO(), session.SessionId, sessionInfo.Item.Version)
 
 	task.Cmd.Wait()
 }

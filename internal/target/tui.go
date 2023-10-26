@@ -104,6 +104,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.quittingUpdate(msg)
 	}
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.tabs[targetsView].SetSize(msg.Width, msg.Height-6)
+		m.tabs[connectedView].SetSize(msg.Width, msg.Height-6)
 	case tea.KeyMsg:
 		// Don't match any of the keys below if we're actively filtering.
 		if m.tabs[m.state].FilterState() == list.Filtering {
@@ -124,32 +129,33 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Sequence(func() tea.Msg { return tea.ClearScreen() })
 		}
-	case connectMsg:
-		res, cmd := m.tabs[connectedView].Update(msg)
-		m.tabs[connectedView] = res
-		return m, cmd
 	case execErrorMsg:
 		m.message = msg.Error()
 		return m, cmd
 	case terminateSessionMsg:
-		TerminateSession(m.boundaryClient, msg.sessionID, msg.task)
-		return m, nil
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.tabs[targetsView].SetSize(msg.Width, msg.Height-6)
-		m.tabs[connectedView].SetSize(msg.Width, msg.Height-6)
+		TerminateSession(m.boundaryClient, msg.session, msg.task)
+		m.tabs[targetsView], cmd = m.tabs[targetsView].Update(msg)
+		cmds = append(cmds, cmd)
+		m.tabs[connectedView], cmd = m.tabs[connectedView].Update(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	case connectMsg:
+		m.tabs[targetsView], cmd = m.tabs[targetsView].Update(msg)
+		cmds = append(cmds, cmd)
+		m.tabs[connectedView], cmd = m.tabs[connectedView].Update(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	}
 
 	switch m.state {
-	// update whichever model is focused
+	case targetsView:
+		m.tabs[targetsView], cmd = m.tabs[targetsView].Update(msg)
+		cmds = append(cmds, cmd)
 	case connectedView:
 		m.tabs[connectedView], cmd = m.tabs[connectedView].Update(msg)
 		cmds = append(cmds, cmd)
-	default:
-		m.tabs[targetsView], cmd = m.tabs[targetsView].Update(msg)
-		cmds = append(cmds, cmd)
 	}
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -261,7 +267,7 @@ func Tui(targets *targets.TargetListResult, boundaryClient *api.Client) {
 	tuiTargets := make([]list.Item, 0)
 
 	for _, t := range targets.Items {
-		tuiTargets = append(tuiTargets, Target{title: fmt.Sprintf("%s (%s)", t.Name, t.Scope.Name), description: t.Description, target: t})
+		tuiTargets = append(tuiTargets, &Target{title: fmt.Sprintf("%s (%s)", t.Name, t.Scope.Name), description: t.Description, target: t})
 	}
 
 	m := newModel(boundaryClient)

@@ -7,7 +7,7 @@ import (
 )
 
 type connectMsg struct {
-	Target
+	*Target
 }
 
 type execErrorMsg struct {
@@ -15,7 +15,7 @@ type execErrorMsg struct {
 }
 
 type terminateSessionMsg struct {
-	Target
+	*Target
 }
 
 type openShellMsg struct {
@@ -66,10 +66,10 @@ func newTargetDelegate(model *mainModel) list.DefaultDelegate {
 		case tea.KeyMsg:
 			switch {
 			case key.Matches(msg, keys.shell):
-				if i, ok := m.SelectedItem().(Target); ok {
-					task, cmd, sessionID, _ := ConnectToTarget(i)
+				if i, ok := m.SelectedItem().(*Target); ok {
+					task, cmd, session, _ := ConnectToTarget(i)
 
-					i.sessionID = sessionID
+					i.session = session
 					i.task = task
 					// send connect event upstream
 					if cmd == nil {
@@ -95,17 +95,17 @@ func newTargetDelegate(model *mainModel) list.DefaultDelegate {
 					}
 				}
 			case key.Matches(msg, keys.connect):
-				if i, ok := m.SelectedItem().(Target); ok {
-					task, _, sessionID, _ := ConnectToTarget(i)
-
-					i.sessionID = sessionID
-					i.task = task
+				if i, ok := m.SelectedItem().(*Target); ok {
 					// send connect event upstream
 					return tea.Sequence(
 						func() tea.Msg { return connectMsg{i} },
 					)
 				}
 			}
+		case connectMsg:
+			task, _, session, _ := ConnectToTarget(msg.Target)
+			msg.Target.session = session
+			msg.Target.task = task
 		}
 
 		return nil

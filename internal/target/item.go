@@ -9,7 +9,7 @@ type Target struct {
 	title       string
 	description string
 	target      *targets.Target
-	sessionID   string
+	session     *SessionInfo
 	task        *run.Task
 }
 
