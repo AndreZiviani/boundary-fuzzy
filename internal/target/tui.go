@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/AndreZiviani/boundary-fuzzy/internal/client"
 	"github.com/charmbracelet/bubbles/list"
@@ -22,22 +23,28 @@ const (
 )
 
 var (
-	modelStyle         = lipgloss.NewStyle().BorderStyle(lipgloss.HiddenBorder())
-	targetListStyle    = modelStyle
-	connectedListStyle = modelStyle
-	focusedModelStyle  = lipgloss.NewStyle().
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(lipgloss.Color("69"))
-	statusMessageStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.AdaptiveColor{Light: "#04B575", Dark: "#04B575"}).
-				Render
-
 	alertViewStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("170"))
 	choiceStyle    = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("241"))
 	errorStyle     = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#cc0000", Dark: "#cc0000"}).
 			Render
+
+	highlightColor    = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
+	docStyle          = lipgloss.NewStyle().Padding(2, 1, 0, 1)
+	windowStyle       = lipgloss.NewStyle().BorderForeground(highlightColor).Padding(1, 1, 1, 1).Align(lipgloss.Left).Border(lipgloss.NormalBorder()).UnsetBorderTop()
+	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
+	activeTabStyle    = inactiveTabStyle.Copy().Border(activeTabBorder, true).Bold(true).Faint(false)
+	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
+	inactiveTabStyle  = lipgloss.NewStyle().Border(inactiveTabBorder, true).BorderForeground(highlightColor).Padding(0, 1).Faint(true)
 )
+
+func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
+	border := lipgloss.RoundedBorder()
+	border.BottomLeft = left
+	border.Bottom = middle
+	border.BottomRight = right
+	return border
+}
 
 func NewConnect() *Connect {
 	connect := Connect{}
@@ -66,8 +73,8 @@ func (c *Connect) Execute(ctx context.Context) error {
 type mainModel struct {
 	state          sessionState
 	index          int
-	targets        list.Model
-	connected      list.Model
+	tabs           []list.Model
+	tabsName       []string
 	boundaryClient *api.Client
 
 	width      int
@@ -80,15 +87,6 @@ type mainModel struct {
 func newModel(boundaryClient *api.Client) mainModel {
 	m := mainModel{state: targetsView, boundaryClient: boundaryClient}
 	return m
-}
-
-func (m mainModel) currentFocusedModel() sessionState {
-	switch m.state {
-	case targetsView:
-		return targetsView
-	default:
-		return connectedView
-	}
 }
 
 func (m mainModel) Init() tea.Cmd {
@@ -108,15 +106,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Don't match any of the keys below if we're actively filtering.
-		if m.connected.FilterState() == list.Filtering || m.targets.FilterState() == list.Filtering {
+		if m.tabs[m.state].FilterState() == list.Filtering {
 			break
 		}
 		switch msg.String() {
-		case "esc":
-			return m, nil
 		case "q", "ctrl+c":
 			m.quitting = true
-			if len(m.connected.Items()) == 0 {
+			if len(m.tabs[connectedView].Items()) == 0 {
 				m.shouldQuit = true
 			}
 			return m, tea.Quit
@@ -126,10 +122,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.state = targetsView
 			}
+			return m, tea.Sequence(func() tea.Msg { return tea.ClearScreen() })
 		}
 	case connectMsg:
-		res, cmd := m.connected.Update(msg)
-		m.connected = res
+		res, cmd := m.tabs[connectedView].Update(msg)
+		m.tabs[connectedView] = res
 		return m, cmd
 	case execErrorMsg:
 		m.message = msg.Error()
@@ -140,18 +137,17 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		//m.targets.SetSize(msg.Width-3, msg.Height-2)
-		m.targets.SetSize((msg.Width/2)-3, msg.Height-2)
-		m.connected.SetSize((msg.Width/2)-3, msg.Height-2)
+		m.tabs[targetsView].SetSize(msg.Width, msg.Height-6)
+		m.tabs[connectedView].SetSize(msg.Width, msg.Height-6)
 	}
 
 	switch m.state {
 	// update whichever model is focused
 	case connectedView:
-		m.connected, cmd = m.connected.Update(msg)
+		m.tabs[connectedView], cmd = m.tabs[connectedView].Update(msg)
 		cmds = append(cmds, cmd)
 	default:
-		m.targets, cmd = m.targets.Update(msg)
+		m.tabs[targetsView], cmd = m.tabs[targetsView].Update(msg)
 		cmds = append(cmds, cmd)
 	}
 	return m, tea.Batch(cmds...)
@@ -164,27 +160,61 @@ func (m mainModel) View() string {
 	}
 
 	if m.quitting {
-		if len(m.connected.Items()) > 0 {
-			text := alertViewStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, fmt.Sprintf("You have %d active session(s), terminate every session and quit?", len(m.connected.Items())), choiceStyle.Render("[y/N]")))
+		if len(m.tabs[connectedView].Items()) > 0 {
+			text := alertViewStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, fmt.Sprintf("You have %d active session(s), terminate every session and quit?", len(m.tabs[connectedView].Items())), choiceStyle.Render("[y/N]")))
 			return lipgloss.NewStyle().Padding((m.height/2)-1, (m.width-lipgloss.Width(text))/2).Render(text)
 		} else {
 			return ""
 		}
 	}
-	switch m.currentFocusedModel() {
-	case targetsView:
-		return lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			focusedModelStyle.Render(m.targets.View()),
-			connectedListStyle.Render(m.connected.View()),
-		)
-	default:
-		return lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			targetListStyle.Render(m.targets.View()),
-			focusedModelStyle.Render(m.connected.View()),
-		)
+
+	var renderedTabs []string
+
+	for i, _ := range m.tabs {
+		var style lipgloss.Style
+		isFirst, isLast, isActive := i == 0, i == len(m.tabs)-1, i == int(m.state)
+		if isActive {
+			style = activeTabStyle.Copy()
+		} else {
+			style = inactiveTabStyle.Copy()
+		}
+		border, _, _, _, _ := style.GetBorder()
+		if isFirst && isActive {
+			border.BottomLeft = "│"
+		} else if isFirst && !isActive {
+			border.BottomLeft = "├"
+		} else if isLast && !isActive {
+			border.BottomRight = "┴"
+		}
+		style = style.Border(border)
+		renderedTabs = append(renderedTabs, style.Render(fmt.Sprintf("%s (%d)", m.tabsName[i], len(m.tabs[i].Items()))))
 	}
+
+	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
+	remainingTopBorder := ""
+	if m.width > 0 {
+		rowLength, _ := lipgloss.Size(row)
+		borderStyle := windowStyle.GetBorderStyle()
+
+		remainingTopBorder = lipgloss.NewStyle().Foreground(highlightColor).Render(strings.Repeat(borderStyle.Top, m.width-rowLength-3) + borderStyle.TopRight)
+	}
+
+	doc := strings.Builder{}
+	doc.WriteString(row + remainingTopBorder)
+	doc.WriteString("\n")
+	doc.WriteString(
+		windowStyle.
+			Width(
+				(m.width - windowStyle.GetHorizontalFrameSize()),
+			).
+			Height(
+				(m.height - windowStyle.GetVerticalFrameSize()),
+			).
+			Render(
+				m.tabs[m.state].View(),
+			),
+	)
+	return docStyle.Render(doc.String())
 }
 
 func (m mainModel) messageUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -196,7 +226,7 @@ func (m mainModel) messageUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m mainModel) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if len(m.connected.Items()) == 0 {
+	if len(m.tabs[connectedView].Items()) == 0 {
 		m.shouldQuit = true
 		return m, tea.Quit
 	}
@@ -237,12 +267,13 @@ func Tui(targets *targets.TargetListResult, boundaryClient *api.Client) {
 	m := newModel(boundaryClient)
 
 	targetList := list.New(tuiTargets, newTargetDelegate(&m), 0, 0)
-	targetList.Title = "Targets"
+	targetList.SetShowTitle(false)
 	connectedList := list.New([]list.Item{}, newConnectedDelegate(&m), 0, 0)
-	connectedList.Title = "Connected"
+	connectedList.SetShowTitle(false)
 
-	m.targets = targetList
-	m.connected = connectedList
+	m.tabs = []list.Model{targetList, connectedList}
+	m.tabsName = []string{"Targets", "Connected"}
+
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithFilter(filter))
 
 	if _, err := p.Run(); err != nil {

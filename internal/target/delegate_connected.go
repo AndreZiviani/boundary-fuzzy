@@ -46,7 +46,10 @@ func newConnectedDelegate(model *mainModel) list.DefaultDelegate {
 				if i, ok := m.SelectedItem().(Target); ok {
 					// send disconnect event upstream
 					m.RemoveItem(m.Index())
-					return tea.Sequence(func() tea.Msg { return terminateSessionMsg{i} })
+					return tea.Sequence(
+						func() tea.Msg { return terminateSessionMsg{i} },
+						func() tea.Msg { return tea.ClearScreen() },
+					)
 				}
 			}
 		case connectMsg:
