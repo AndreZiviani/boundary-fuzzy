@@ -1,12 +1,14 @@
 package target
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AndreZiviani/boundary-fuzzy/internal/run"
@@ -28,12 +30,20 @@ type SessionInfo struct {
 func ConnectToTarget(target *Target) (*run.Task, *exec.Cmd, *SessionInfo, error) {
 	task := run.RunTask("boundary", []string{"connect", "-target-id", target.target.Id, "-format", "json"})
 
-	task.Output.Scan()
-
 	var session SessionInfo
-	err := json.Unmarshal(task.Output.Bytes(), &session)
+
+	reader := bufio.NewReader(task.Output)
+	msg, err := reader.ReadString('\n')
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf(msg)
+	}
+
+	tmp := strings.NewReader(msg)
+	d := json.NewDecoder(tmp)
+	d.DisallowUnknownFields()
+	err = d.Decode(&session)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf(msg)
 	}
 
 	var cmd *exec.Cmd

@@ -1,15 +1,15 @@
 package run
 
 import (
-	"bufio"
 	"context"
+	"io"
 	"os/exec"
 )
 
 type Task struct {
 	Command string
 	Args    []string
-	Output  *bufio.Scanner
+	Output  io.Reader
 	Cmd     *exec.Cmd
 
 	Cancel func()
@@ -32,13 +32,10 @@ func RunTask(command string, args []string) *Task {
 	// Make a new channel which will be used to ensure we get all output
 	done := make(chan struct{})
 
-	// Create a scanner which scans r in a line-by-line fashion
-	scanner := bufio.NewScanner(r)
-
 	t := Task{
 		Command: command,
 		Args:    args,
-		Output:  scanner,
+		Output:  r,
 		Cmd:     cmd,
 		Cancel:  cancel,
 		DoneCh:  done,
