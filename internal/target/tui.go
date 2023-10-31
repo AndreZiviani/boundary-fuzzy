@@ -22,13 +22,16 @@ const (
 	targetsView sessionState = iota
 	connectedView
 	messageView
+	errorView
 	quittingView
 )
 
 var (
 	alertViewStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("170"))
 	choiceStyle    = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("241"))
-	errorStyle     = lipgloss.NewStyle().
+	messageStyle   = lipgloss.NewStyle().
+			Render
+	errorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#cc0000", Dark: "#cc0000"}).
 			Render
 
@@ -105,7 +108,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch m.state {
-	case messageView:
+	case errorView, messageView:
 		return m.messageUpdate(msg)
 	case quittingView:
 		return m.quittingUpdate(msg)
@@ -123,7 +126,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					task, cmd, session, err := ConnectToTarget(i)
 					if err != nil {
 						m.previousState = m.state
-						m.state = messageView
+						m.state = errorView
 						m.message = err.Error()
 						return m, nil
 					}
@@ -144,7 +147,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									TerminateSession(m.boundaryClient, i.session, i.task)
 									if err != nil {
 										m.previousState = m.state
-										m.state = messageView
+										m.state = errorView
 										m.message = err.Error()
 										return nil
 									}
@@ -160,7 +163,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					task, _, session, err := ConnectToTarget(i)
 					if err != nil {
 						m.previousState = m.state
-						m.state = messageView
+						m.state = errorView
 						m.message = err.Error()
 						return m, nil
 					}
@@ -187,7 +190,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					task, _, session, err := ConnectToTarget(i)
 					if err != nil {
 						m.previousState = m.state
-						m.state = messageView
+						m.state = errorView
 						m.message = err.Error()
 						return m, nil
 					}
@@ -199,6 +202,33 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if i, ok := me.SelectedItem().(*Target); ok {
 					TerminateSession(m.boundaryClient, i.session, i.task)
 					me.RemoveItem(me.Index())
+					return m, nil
+				}
+			case key.Matches(msg, m.connectedKeyMap.info):
+				if i, ok := me.SelectedItem().(*Target); ok {
+					m.previousState = m.state
+					m.state = messageView
+					m.message = fmt.Sprintf(
+						"Scope: %s\n"+
+							"Scope Description: %s\n"+
+							"Name: %s\n"+
+							"Description: %s\n"+
+							"\n"+
+							"Port: %d\n"+
+							"Expiration: %s\n"+
+							"Session Id: %s\n",
+						i.target.Scope.Name, i.target.Scope.Description, i.target.Name, i.target.Description,
+						i.session.Port, i.session.Expiration, i.session.SessionId,
+					)
+					if len(i.session.Credentials) > 0 {
+						m.message = fmt.Sprintf(
+							"%s"+
+								"Dynamic Credentials:\n"+
+								"  Username: %s\n"+
+								"  Password: %s\n",
+							m.message, i.session.Credentials[0].Secret.Decoded["username"], i.session.Credentials[0].Secret.Decoded["password"],
+						)
+					}
 					return m, nil
 				}
 			}
@@ -239,12 +269,15 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m mainModel) View() string {
 	switch m.state {
 	case messageView:
+		text := alertViewStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, fmt.Sprintf("%s\n\nPress any key to return", messageStyle(m.message))))
+		return lipgloss.NewStyle().Padding(((m.height-lipgloss.Height(text))/2)-1, (m.width-lipgloss.Width(text))/2, 0).Render(text)
+	case errorView:
 		text := alertViewStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, fmt.Sprintf("Failed to open shell: \n%s\n\nPress any key to return", errorStyle(m.message))))
-		return lipgloss.NewStyle().Padding((m.height/2)-1, (m.width-lipgloss.Width(text))/2).Render(text)
+		return lipgloss.NewStyle().Padding(((m.height-lipgloss.Height(text))/2)-1, (m.width-lipgloss.Width(text))/2, 0).Render(text)
 	case quittingView:
 		if len(m.tabs[connectedView].Items()) > 0 {
 			text := alertViewStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, fmt.Sprintf("You have %d active session(s), terminate every session and quit?", len(m.tabs[connectedView].Items())), choiceStyle.Render("[y/N]")))
-			return lipgloss.NewStyle().Padding((m.height/2)-1, (m.width-lipgloss.Width(text))/2).Render(text)
+			return lipgloss.NewStyle().Padding(((m.height-lipgloss.Height(text))/2)-1, (m.width-lipgloss.Width(text))/2, 0).Render(text)
 		} else {
 			return ""
 		}
