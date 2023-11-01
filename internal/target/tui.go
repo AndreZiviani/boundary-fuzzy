@@ -37,7 +37,7 @@ var (
 
 	highlightColor    = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
 	docStyle          = lipgloss.NewStyle()
-	windowStyle       = lipgloss.NewStyle().BorderForeground(highlightColor).Padding(2, 0, 0, 0).Align(lipgloss.Left).Border(lipgloss.NormalBorder()).UnsetBorderTop()
+	windowStyle       = lipgloss.NewStyle().BorderForeground(highlightColor).Align(lipgloss.Left).Border(lipgloss.NormalBorder()).UnsetBorderTop()
 	activeTabBorder   = tabBorderWithBottom("┘", " ", "└")
 	activeTabStyle    = inactiveTabStyle.Copy().Border(activeTabBorder, true).Bold(true).Faint(false)
 	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
@@ -237,8 +237,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.tabs[targetsView].SetSize(msg.Width, msg.Height-6)
-		m.tabs[connectedView].SetSize(msg.Width, msg.Height-6)
+		m.tabs[targetsView].SetSize(msg.Width-2, msg.Height-4)
+		m.tabs[connectedView].SetSize(msg.Width-2, msg.Height-4)
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -313,15 +313,14 @@ func (m mainModel) View() string {
 		}
 
 		doc := strings.Builder{}
-		doc.WriteString(row + remainingTopBorder)
-		doc.WriteString("\n")
+		doc.WriteString(row + remainingTopBorder + "\n")
 		doc.WriteString(
 			windowStyle.
 				Width(
 					(m.width - windowStyle.GetHorizontalFrameSize()),
 				).
 				Height(
-					(m.height - windowStyle.GetVerticalFrameSize()),
+					(m.height - windowStyle.GetVerticalFrameSize() - 2),
 				).
 				Render(
 					m.tabs[m.state].View(),
