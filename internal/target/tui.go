@@ -113,16 +113,15 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case quittingView:
 		return m.quittingUpdate(msg)
 	case targetsView:
-		me := m.tabs[m.state]
 		// Don't match any of the keys below if we're actively filtering.
-		if me.FilterState() == list.Filtering {
+		if m.tabs[m.state].FilterState() == list.Filtering {
 			break
 		}
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch {
 			case key.Matches(msg, m.targetKeyMap.shell):
-				if i, ok := me.SelectedItem().(*Target); ok {
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					task, cmd, session, err := ConnectToTarget(i)
 					if err != nil {
 						m.previousState = m.state
@@ -158,7 +157,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			case key.Matches(msg, m.targetKeyMap.connect):
-				if i, ok := me.SelectedItem().(*Target); ok {
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					// send connect event upstream
 					task, _, session, err := ConnectToTarget(i)
 					if err != nil {
@@ -176,16 +175,15 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case connectedView:
-		me := m.tabs[m.state]
 		// Don't match any of the keys below if we're actively filtering.
-		if me.FilterState() == list.Filtering {
+		if m.tabs[m.state].FilterState() == list.Filtering {
 			break
 		}
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch {
 			case key.Matches(msg, m.connectedKeyMap.reconnect):
-				if i, ok := me.SelectedItem().(*Target); ok {
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					TerminateSession(m.boundaryClient, i.session, i.task)
 					task, _, session, err := ConnectToTarget(i)
 					if err != nil {
@@ -199,13 +197,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			case key.Matches(msg, m.connectedKeyMap.disconnect):
-				if i, ok := me.SelectedItem().(*Target); ok {
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					TerminateSession(m.boundaryClient, i.session, i.task)
-					me.RemoveItem(me.Index())
+					m.tabs[m.state].RemoveItem(m.tabs[m.state].Index())
 					return m, nil
 				}
 			case key.Matches(msg, m.connectedKeyMap.info):
-				if i, ok := me.SelectedItem().(*Target); ok {
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					m.previousState = m.state
 					m.state = messageView
 					m.message = fmt.Sprintf(
