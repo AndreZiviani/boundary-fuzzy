@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/AndreZiviani/boundary-fuzzy/internal/client"
@@ -120,6 +121,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch {
+			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
+				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
+				return m, cmd
 			case key.Matches(msg, m.targetKeyMap.shell):
 				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					task, cmd, session, err := ConnectToTarget(i)
@@ -182,6 +186,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch {
+			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
+				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
+				return m, cmd
 			case key.Matches(msg, m.connectedKeyMap.reconnect):
 				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					TerminateSession(m.boundaryClient, i.session, i.task)
@@ -375,6 +382,16 @@ func filter(teaModel tea.Model, msg tea.Msg) tea.Msg {
 	}
 
 	return msg
+}
+
+func listKeyMap(keymap list.KeyMap) []key.Binding {
+	var bindings []key.Binding
+	v := reflect.ValueOf(keymap)
+	for i := 0; i < v.NumField(); i++ {
+		bindings = append(bindings, v.Field(i).Interface().(key.Binding))
+	}
+
+	return bindings
 }
 
 func Tui(targets *targets.TargetListResult, boundaryClient *api.Client) {
