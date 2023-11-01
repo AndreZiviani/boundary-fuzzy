@@ -240,6 +240,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tabs[targetsView].SetSize(msg.Width-2, msg.Height-4)
 		m.tabs[connectedView].SetSize(msg.Width-2, msg.Height-4)
 	case tea.KeyMsg:
+		// Don't match any of the keys below if we're actively filtering.
+		if m.tabs[m.state].FilterState() == list.Filtering {
+			break
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
