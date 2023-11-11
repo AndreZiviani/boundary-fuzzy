@@ -244,8 +244,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.tabs[targetsView].SetSize(msg.Width-2, msg.Height-4)
-		m.tabs[connectedView].SetSize(msg.Width-2, msg.Height-4)
 	case tea.KeyMsg:
 		// Don't match any of the keys below if we're actively filtering.
 		if m.tabs[m.state].FilterState() == list.Filtering {
@@ -323,21 +321,22 @@ func (m mainModel) View() string {
 			remainingTopBorder = lipgloss.NewStyle().Foreground(highlightColor).Render(strings.Repeat(borderStyle.Top, m.width-rowLength-1) + borderStyle.TopRight)
 		}
 
-		doc := strings.Builder{}
-		doc.WriteString(row + remainingTopBorder + "\n")
-		doc.WriteString(
+		header := row + remainingTopBorder
+		headerHeight := lipgloss.Height(header) - 1 // ignore last \n
+		contentHeight := m.height - windowStyle.GetVerticalFrameSize() - headerHeight
+		contentWidth := m.width - windowStyle.GetHorizontalFrameSize()
+
+		m.tabs[targetsView].SetSize(contentWidth, contentHeight)
+		m.tabs[connectedView].SetSize(contentWidth, contentHeight)
+		return lipgloss.JoinVertical(lipgloss.Top,
+			header,
 			windowStyle.
-				Width(
-					(m.width - windowStyle.GetHorizontalFrameSize()),
-				).
-				Height(
-					(m.height - windowStyle.GetVerticalFrameSize() - 2),
-				).
+				Width(contentWidth).
+				Height(contentHeight).
 				Render(
 					m.tabs[m.state].View(),
 				),
 		)
-		return docStyle.Render(doc.String())
 	}
 	return ""
 }
