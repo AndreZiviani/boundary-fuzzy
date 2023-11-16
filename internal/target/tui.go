@@ -347,9 +347,17 @@ func (m mainModel) messageUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *mainModel) terminateAllSessions() {
+	for _, item := range m.tabs[connectedView].Items() {
+		target := item.(*Target)
+		TerminateSession(m.boundaryClient, target.session, target.task)
+	}
+}
+
 func (m mainModel) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if len(m.tabs[connectedView].Items()) == 0 {
 		m.shouldQuit = true
+		m.terminateAllSessions()
 		return m, tea.Quit
 	}
 
@@ -358,6 +366,7 @@ func (m mainModel) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// For simplicity's sake, we'll treat any key besides "y" as "no"
 		if msg.String() == "y" {
 			m.shouldQuit = true
+			m.terminateAllSessions()
 			return m, tea.Quit
 		}
 		m.shouldQuit = false
