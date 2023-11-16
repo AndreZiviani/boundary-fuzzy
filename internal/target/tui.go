@@ -90,7 +90,6 @@ type mainModel struct {
 
 	width      int
 	height     int
-	quitting   bool
 	shouldQuit bool
 	message    string
 }
@@ -251,10 +250,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "q", "ctrl+c":
-			m.quitting = true
-			if len(m.tabs[connectedView].Items()) == 0 {
-				m.shouldQuit = true
-			}
+			m.previousState = m.state
+			m.state = quittingView
 			return m, tea.Quit
 		case "tab":
 			if m.state == targetsView {
@@ -364,7 +361,6 @@ func (m mainModel) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.shouldQuit = false
-		m.quitting = false
 		m.state = m.previousState
 	}
 	return m, nil
@@ -405,9 +401,11 @@ func Tui(targets *targets.TargetListResult, boundaryClient *api.Client) {
 	targetDelegate, targetKeyMap := newTargetDelegate(&m)
 	targetList := list.New(tuiTargets, targetDelegate, 0, 0)
 	targetList.SetShowTitle(false)
+	targetList.DisableQuitKeybindings()
 	connectedDelegate, connectedKeyMap := newConnectedDelegate(&m)
 	connectedList := list.New([]list.Item{}, connectedDelegate, 0, 0)
 	connectedList.SetShowTitle(false)
+	connectedList.DisableQuitKeybindings()
 
 	m.tabs = []list.Model{targetList, connectedList}
 	m.tabsName = []string{"Targets", "Connected"}
