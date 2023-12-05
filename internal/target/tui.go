@@ -125,7 +125,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			case key.Matches(msg, m.targetKeyMap.shell):
 				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
-					task, cmd, session, err := ConnectToTarget(i)
+					cmd, err := m.Shell(i)
 					if err != nil {
 						m.previousState = m.state
 						m.state = errorView
@@ -133,31 +133,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 
-					i.session = session
-					i.task = task
-
-					if cmd == nil {
-						// we are trying to connect to a target that we could not identify its type or does not have a client (e.g. HTTP)
-						// just connect to it without opening a shell
-						//TODO: show error message
-						return m, nil
-					} else {
-						return m, tea.Sequence(
-							tea.ExecProcess(
-								cmd,
-								func(err error) tea.Msg {
-									TerminateSession(m.boundaryClient, i.session, i.task)
-									if err != nil {
-										m.previousState = m.state
-										m.state = errorView
-										m.message = err.Error()
-										return nil
-									}
-									return nil
-								},
-							),
-						)
-					}
+					return m, tea.Sequence(cmd)
 				}
 			case key.Matches(msg, m.targetKeyMap.connect):
 				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {

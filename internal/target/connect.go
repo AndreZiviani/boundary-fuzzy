@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/AndreZiviani/boundary-fuzzy/internal/run"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hashicorp/boundary/api"
 	"github.com/hashicorp/boundary/api/sessions"
 	"github.com/hashicorp/boundary/api/targets"
@@ -116,4 +117,35 @@ func TerminateSession(boundaryClient *api.Client, session *SessionInfo, task *ru
 	sessionClient.Cancel(context.TODO(), session.SessionId, sessionInfo.Item.Version)
 
 	task.Cmd.Wait()
+}
+
+func (m mainModel) Shell(target *Target) (tea.Cmd, error) {
+	task, cmd, session, err := ConnectToTarget(target)
+	if err != nil {
+		return nil, err
+	}
+
+	target.session = session
+	target.task = task
+
+	if cmd == nil {
+		// we are trying to connect to a target that we could not identify its type or does not have a client (e.g. HTTP)
+		// just connect to it without opening a shell
+		//TODO: show error message
+		return nil, nil
+	} else {
+		return tea.ExecProcess(
+			cmd,
+			func(err error) tea.Msg {
+				TerminateSession(m.boundaryClient, target.session, target.task)
+				if err != nil {
+					m.previousState = m.state
+					m.state = errorView
+					m.message = err.Error()
+					return nil
+				}
+				return nil
+			},
+		), nil
+	}
 }
