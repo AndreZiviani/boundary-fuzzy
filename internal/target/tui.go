@@ -22,6 +22,7 @@ type sessionState uint
 const (
 	targetsView sessionState = iota
 	connectedView
+	favoriteView
 	messageView
 	errorView
 	quittingView
@@ -84,6 +85,7 @@ type mainModel struct {
 	tabs            []list.Model
 	targetKeyMap    *targetKeyMap
 	connectedKeyMap *connectedKeyMap
+	favoriteKeyMap  *favoriteKeyMap
 
 	tabsName       []string
 	boundaryClient *api.Client
@@ -148,6 +150,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.tabs[connectedView].InsertItem(len(m.tabs[connectedView].Items()), i)
 					return m, nil
 				}
+			case key.Matches(msg, m.targetKeyMap.favorite):
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
+					m.tabs[favoriteView].InsertItem(len(m.tabs[favoriteView].Items()), i)
+					return m, nil
+				}
 			// Prioritize our keybinding instead of default
 			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
 				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
@@ -209,6 +216,59 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, nil
 				}
+			case key.Matches(msg, m.connectedKeyMap.favorite):
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
+					m.tabs[favoriteView].InsertItem(len(m.tabs[favoriteView].Items()), i)
+					return m, nil
+				}
+			// Prioritize our keybinding instead of default
+			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
+				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
+				return m, cmd
+			}
+		}
+	case favoriteView:
+		// Don't match any of the keys below if we're actively filtering.
+		if m.tabs[m.state].FilterState() == list.Filtering {
+			break
+		}
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch {
+			case key.Matches(msg, m.favoriteKeyMap.delete):
+				if _, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
+					m.tabs[m.state].RemoveItem(m.tabs[m.state].Index())
+					return m, nil
+				}
+			case key.Matches(msg, m.favoriteKeyMap.shell):
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
+					cmd, err := m.Shell(i)
+					if err != nil {
+						m.previousState = m.state
+						m.state = errorView
+						m.message = err.Error()
+						return m, nil
+					}
+
+					return m, tea.Sequence(cmd)
+				}
+			case key.Matches(msg, m.favoriteKeyMap.connect):
+				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
+					// send connect event upstream
+					task, _, session, err := ConnectToTarget(i)
+					if err != nil {
+						m.previousState = m.state
+						m.state = errorView
+						m.message = err.Error()
+						return m, nil
+					}
+
+					i.session = session
+					i.task = task
+					m.tabs[connectedView].InsertItem(len(m.tabs[connectedView].Items()), i)
+					return m, nil
+				}
+
 			// Prioritize our keybinding instead of default
 			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
 				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
@@ -232,9 +292,12 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = quittingView
 			return m, tea.Quit
 		case "tab":
-			if m.state == targetsView {
+			switch m.state {
+			case targetsView:
 				m.state = connectedView
-			} else {
+			case connectedView:
+				m.state = favoriteView
+			case favoriteView:
 				m.state = targetsView
 			}
 			cmds = append(cmds, func() tea.Msg { return tea.ClearScreen() })
@@ -244,6 +307,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.tabs[targetsView], cmd = m.tabs[targetsView].Update(msg)
 	cmds = append(cmds, cmd)
 	m.tabs[connectedView], cmd = m.tabs[connectedView].Update(msg)
+	cmds = append(cmds, cmd)
+	m.tabs[favoriteView], cmd = m.tabs[favoriteView].Update(msg)
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
@@ -303,6 +368,7 @@ func (m mainModel) View() string {
 
 		m.tabs[targetsView].SetSize(contentWidth, contentHeight)
 		m.tabs[connectedView].SetSize(contentWidth, contentHeight)
+		m.tabs[favoriteView].SetSize(contentWidth, contentHeight)
 		return lipgloss.JoinVertical(lipgloss.Top,
 			header,
 			windowStyle.
@@ -336,6 +402,8 @@ func (m mainModel) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if len(m.tabs[connectedView].Items()) == 0 {
 		m.shouldQuit = true
 		m.terminateAllSessions()
+		saveFavoriteList(m.tabs[favoriteView])
+
 		return m, tea.Quit
 	}
 
@@ -393,11 +461,22 @@ func Tui(targets *targets.TargetListResult, boundaryClient *api.Client) {
 	connectedList := list.New([]list.Item{}, connectedDelegate, 0, 0)
 	connectedList.SetShowTitle(false)
 	connectedList.DisableQuitKeybindings()
+	favoriteDelegate, favoriteKeyMap := newFavoriteDelegate(&m)
+	favoriteList := list.New([]list.Item{}, favoriteDelegate, 0, 0)
+	favoriteList.SetShowTitle(false)
+	favoriteList.DisableQuitKeybindings()
 
-	m.tabs = []list.Model{targetList, connectedList}
-	m.tabsName = []string{"Targets", "Connected"}
+	err := loadFavoriteList(&favoriteList, tuiTargets)
+	if err != nil {
+		fmt.Println("Error running program:", err)
+		os.Exit(1)
+	}
+
+	m.tabs = []list.Model{targetList, connectedList, favoriteList}
+	m.tabsName = []string{"Targets", "Connected", "Favorites"}
 	m.targetKeyMap = targetKeyMap
 	m.connectedKeyMap = connectedKeyMap
+	m.favoriteKeyMap = favoriteKeyMap
 
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithFilter(filter))
 

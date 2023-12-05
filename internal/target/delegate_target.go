@@ -22,14 +22,16 @@ type openShellMsg struct {
 }
 
 type targetKeyMap struct {
-	shell   key.Binding
-	connect key.Binding
+	shell    key.Binding
+	connect  key.Binding
+	favorite key.Binding
 }
 
 func (c targetKeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		c.shell,
 		c.connect,
+		c.favorite,
 	}
 }
 
@@ -38,6 +40,7 @@ func (c targetKeyMap) FullHelp() [][]key.Binding {
 		{
 			c.shell,
 			c.connect,
+			c.favorite,
 		},
 	}
 }
@@ -52,6 +55,10 @@ func newTargetKeyMap() *targetKeyMap {
 			key.WithKeys("c", "enter"),
 			key.WithHelp("c/enter", "connect to target"),
 		),
+		favorite: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "add target to favorites"),
+		),
 	}
 }
 
@@ -60,7 +67,7 @@ func newTargetDelegate(model *mainModel) (list.DefaultDelegate, *targetKeyMap) {
 
 	keys := newTargetKeyMap()
 
-	help := []key.Binding{keys.shell, keys.connect}
+	help := []key.Binding{keys.shell, keys.connect, keys.favorite}
 
 	d.ShortHelpFunc = func() []key.Binding {
 		return help

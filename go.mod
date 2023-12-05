@@ -6,6 +6,7 @@ require (
 	github.com/charmbracelet/bubbles v0.16.1
 	github.com/charmbracelet/bubbletea v0.24.2
 	github.com/charmbracelet/lipgloss v0.7.1
+	github.com/faabiosr/cachego v0.22.1
 	github.com/hashicorp/boundary/api v0.0.41
 	github.com/jefferai/keyring v1.1.7-0.20220316160357-58a74bb55891
 	github.com/urfave/cli/v2 v2.25.7

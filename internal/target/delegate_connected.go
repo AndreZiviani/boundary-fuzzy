@@ -9,6 +9,7 @@ type connectedKeyMap struct {
 	disconnect key.Binding
 	reconnect  key.Binding
 	info       key.Binding
+	favorite   key.Binding
 }
 
 func (c connectedKeyMap) ShortHelp() []key.Binding {
@@ -16,6 +17,7 @@ func (c connectedKeyMap) ShortHelp() []key.Binding {
 		c.disconnect,
 		c.reconnect,
 		c.info,
+		c.favorite,
 	}
 }
 
@@ -24,6 +26,8 @@ func (c connectedKeyMap) FullHelp() [][]key.Binding {
 		{
 			c.disconnect,
 			c.reconnect,
+			c.info,
+			c.favorite,
 		},
 	}
 }
@@ -42,6 +46,10 @@ func newConnectedKeyMap() *connectedKeyMap {
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "show session info"),
 		),
+		favorite: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "add target to favorites"),
+		),
 	}
 }
 
@@ -50,7 +58,7 @@ func newConnectedDelegate(model *mainModel) (list.DefaultDelegate, *connectedKey
 
 	keys := newConnectedKeyMap()
 
-	help := []key.Binding{keys.disconnect, keys.reconnect, keys.info}
+	help := []key.Binding{keys.disconnect, keys.reconnect, keys.info, keys.favorite}
 
 	d.ShortHelpFunc = func() []key.Binding {
 		return help
