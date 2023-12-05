@@ -120,9 +120,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch {
-			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
-				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
-				return m, cmd
 			case key.Matches(msg, m.targetKeyMap.shell):
 				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					cmd, err := m.Shell(i)
@@ -151,6 +148,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.tabs[connectedView].InsertItem(len(m.tabs[connectedView].Items()), i)
 					return m, nil
 				}
+			// Prioritize our keybinding instead of default
+			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
+				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
+				return m, cmd
 			}
 		}
 	case connectedView:
@@ -161,9 +162,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch {
-			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
-				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
-				return m, cmd
 			case key.Matches(msg, m.connectedKeyMap.reconnect):
 				if i, ok := m.tabs[m.state].SelectedItem().(*Target); ok {
 					TerminateSession(m.boundaryClient, i.session, i.task)
@@ -211,6 +209,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, nil
 				}
+			// Prioritize our keybinding instead of default
+			case key.Matches(msg, listKeyMap(m.tabs[m.state].KeyMap)...):
+				m.tabs[m.state], cmd = m.tabs[m.state].Update(msg)
+				return m, cmd
 			}
 		}
 	}
