@@ -1,4 +1,4 @@
-package client
+package keyring
 
 import (
 	"encoding/base64"
@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/hashicorp/boundary/api/authmethods"
 	"github.com/hashicorp/boundary/api/authtokens"
 	nkeyring "github.com/jefferai/keyring"
 	zkeyring "github.com/zalando/go-keyring"
@@ -32,20 +33,22 @@ const (
 	StoredTokenName = "HashiCorp Boundary Auth Token"
 )
 
-func getBoundaryToken() (string, error) {
+func GetBoundaryToken() (*authtokens.AuthToken, error) {
 	token := os.Getenv(EnvToken)
 	if len(token) == 0 {
 		keyringType, tokenName, err := discoverKeyringTokenInfo()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		authToken, err := readTokenFromKeyring(keyringType, tokenName)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return authToken.Token, nil
+		return authToken, nil
 	} else {
-		return token, nil
+		return &authtokens.AuthToken{
+			Token: token,
+		}, nil
 	}
 }
 
@@ -126,12 +129,10 @@ func readTokenFromKeyring(keyringType, tokenName string) (*authtokens.AuthToken,
 		token, err = zkeyring.Get(StoredTokenName, tokenName)
 		if err != nil {
 			if err == zkeyring.ErrNotFound {
-				fmt.Println("No saved credential found, continuing without")
+				return nil, errors.Join(fmt.Errorf("No saved credential found"), err)
 			} else {
-				fmt.Printf(fmt.Sprintf("Error reading auth token from keyring: %s\n", err))
-				fmt.Printf("Token must be provided via BOUNDARY_TOKEN env var or -token flag. Reading the token can also be disabled via -keyring-type=none.\n")
+				return nil, errors.Join(fmt.Errorf("Error reading auth token from keyring"), err)
 			}
-			token = ""
 		}
 
 	default:
@@ -141,18 +142,16 @@ func readTokenFromKeyring(keyringType, tokenName string) (*authtokens.AuthToken,
 			AllowedBackends:         []nkeyring.BackendType{nkeyring.BackendType(keyringType)},
 		}
 
-		kr, err := nkeyring.Open(krConfig)
+		var kr nkeyring.Keyring
+		kr, err = nkeyring.Open(krConfig)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("Error opening keyring: %s", err))
-			fmt.Println("Token must be provided via BOUNDARY_TOKEN env var or -token flag. Reading the token can also be disabled via -keyring-type=none.")
-			break
+			return nil, errors.Join(fmt.Errorf("Error opening keyring"), err)
 		}
 
-		item, err := kr.Get(tokenName)
+		var item nkeyring.Item
+		item, err = kr.Get(tokenName)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("Error fetching token from keyring: %s", err))
-			fmt.Println("Token must be provided via BOUNDARY_TOKEN env var or -token flag. Reading the token can also be disabled via -keyring-type=none.")
-			break
+			return nil, errors.Join(fmt.Errorf("Error reading auth token from keyring"), err)
 		}
 
 		token = string(item.Data)
@@ -162,13 +161,13 @@ func readTokenFromKeyring(keyringType, tokenName string) (*authtokens.AuthToken,
 		tokenBytes, err := base64.RawStdEncoding.DecodeString(token)
 		switch {
 		case err != nil:
-			fmt.Println(fmt.Errorf("Error base64-unmarshaling stored token from system credential store: %w", err).Error())
+			return nil, errors.Join(fmt.Errorf("Error base64-unmarshaling stored token from system credential store"), err)
 		case len(tokenBytes) == 0:
-			fmt.Println("Zero length token after decoding stored token from system credential store")
+			return nil, errors.New("Zero length token after decoding stored token from system credential store")
 		default:
 			var authToken authtokens.AuthToken
 			if err := json.Unmarshal(tokenBytes, &authToken); err != nil {
-				fmt.Println(fmt.Sprintf("Error unmarshaling stored token information after reading from system credential store: %s", err))
+				return nil, errors.Join(fmt.Errorf("Error unmarshaling stored token information after reading from system credential store"), err)
 			} else {
 				return &authToken, nil
 			}
@@ -183,4 +182,51 @@ func TokenIdFromToken(token string) (string, error) {
 		return "", errors.New("Unexpected stored token format")
 	}
 	return strings.Join(split[0:2], "_"), nil
+}
+
+func SaveTokenToKeyring(result *authmethods.AuthenticateResult) error {
+	token := new(authtokens.AuthToken)
+	if err := json.Unmarshal(result.GetRawAttributes(), token); err != nil {
+		return err
+	}
+
+	keyringType, tokenName, err := discoverKeyringTokenInfo()
+	if err != nil {
+		return err
+	} else if keyringType != "none" && tokenName != "none" && keyringType != "" && tokenName != "" {
+		marshaled, err := json.Marshal(token)
+		if err != nil {
+			return err
+		}
+		switch keyringType {
+		case "wincred", "keychain":
+			if err := zkeyring.Set(StoredTokenName, tokenName, base64.RawStdEncoding.EncodeToString(marshaled)); err != nil {
+				return err
+			}
+		default:
+			krConfig := nkeyring.Config{
+				LibSecretCollectionName: LoginCollection,
+				PassPrefix:              PassPrefix,
+				AllowedBackends:         []nkeyring.BackendType{nkeyring.BackendType(keyringType)},
+			}
+
+			kr, err := nkeyring.Open(krConfig)
+			if err != nil {
+				return err
+			}
+
+			if err := kr.Set(nkeyring.Item{
+				Key:  tokenName,
+				Data: []byte(base64.RawStdEncoding.EncodeToString(marshaled)),
+			}); err != nil {
+				return err
+			}
+		}
+
+		fmt.Printf("Token %q saved to keyring %q\n", tokenName, keyringType)
+
+	}
+
+	// fmt.Printf("Token: %s\n", token.Token)
+	return nil
 }

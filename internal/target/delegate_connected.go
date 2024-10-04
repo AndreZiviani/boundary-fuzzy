@@ -53,7 +53,7 @@ func newConnectedKeyMap() *connectedKeyMap {
 	}
 }
 
-func newConnectedDelegate(model *mainModel) (list.DefaultDelegate, *connectedKeyMap) {
+func newConnectedDelegate() (list.DefaultDelegate, *connectedKeyMap) {
 	d := list.NewDefaultDelegate()
 
 	keys := newConnectedKeyMap()

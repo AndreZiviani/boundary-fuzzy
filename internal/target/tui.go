@@ -2,6 +2,7 @@ package target
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -13,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hashicorp/boundary/api"
+	"github.com/hashicorp/boundary/api/authtokens"
 	"github.com/hashicorp/boundary/api/targets"
 )
 
@@ -61,10 +63,10 @@ func NewConnect() *Connect {
 }
 
 func (c *Connect) Execute(ctx context.Context) error {
-	var err error
-	c.boundaryClient, err = client.NewBoundaryClient()
+	boundaryClient, boundaryToken, err := client.NewBoundaryClient()
+	c.boundaryClient = boundaryClient
 	if err != nil {
-		return err
+		return errors.Join(err, fmt.Errorf("\nReauthenticate or provide a token via BOUNDARY_TOKEN env var or -token flag. Reading the token can also be disabled via -keyring-type=none."))
 	}
 
 	c.targetClient = targets.NewClient(c.boundaryClient)
@@ -74,7 +76,7 @@ func (c *Connect) Execute(ctx context.Context) error {
 		return err
 	}
 
-	Tui(result, c.boundaryClient)
+	Tui(result, c.boundaryClient, boundaryToken)
 	return nil
 }
 
@@ -89,6 +91,7 @@ type mainModel struct {
 
 	tabsName       []string
 	boundaryClient *api.Client
+	boundaryToken  *authtokens.AuthToken
 
 	width      int
 	height     int
@@ -96,8 +99,13 @@ type mainModel struct {
 	message    string
 }
 
-func newModel(boundaryClient *api.Client) mainModel {
-	m := mainModel{state: targetsView, previousState: targetsView, boundaryClient: boundaryClient}
+func newModel(boundaryClient *api.Client, boundaryToken *authtokens.AuthToken) mainModel {
+	m := mainModel{
+		state:          targetsView,
+		previousState:  targetsView,
+		boundaryClient: boundaryClient,
+		boundaryToken:  boundaryToken,
+	}
 	return m
 }
 
@@ -332,13 +340,13 @@ func (m mainModel) View() string {
 
 		var renderedTabs []string
 
-		for i, _ := range m.tabs {
+		for i := range m.tabs {
 			var style lipgloss.Style
 			isFirst, isLast, isActive := i == 0, i == len(m.tabs)-1, i == int(m.state)
 			if isActive {
-				style = activeTabStyle.Copy()
+				style = activeTabStyle
 			} else {
-				style = inactiveTabStyle.Copy()
+				style = inactiveTabStyle
 			}
 			border, _, _, _, _ := style.GetBorder()
 			if isFirst && isActive {
@@ -361,7 +369,9 @@ func (m mainModel) View() string {
 			remainingTopBorder = lipgloss.NewStyle().Foreground(highlightColor).Render(strings.Repeat(borderStyle.Top, m.width-rowLength-1) + borderStyle.TopRight)
 		}
 
-		header := row + remainingTopBorder
+		expires := lipgloss.NewStyle().Render("Session expires at " + m.boundaryToken.ExpirationTime.Local().Format("2006/01/02 15:04:05 MST") + "\n")
+
+		header := expires + row + remainingTopBorder
 		headerHeight := lipgloss.Height(header) - 1 // ignore last \n
 		contentHeight := m.height - windowStyle.GetVerticalFrameSize() - headerHeight
 		contentWidth := m.width - windowStyle.GetHorizontalFrameSize()
@@ -379,7 +389,6 @@ func (m mainModel) View() string {
 				),
 		)
 	}
-	return ""
 }
 
 func (m mainModel) messageUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -444,24 +453,24 @@ func listKeyMap(keymap list.KeyMap) []key.Binding {
 	return bindings
 }
 
-func Tui(targets *targets.TargetListResult, boundaryClient *api.Client) {
+func Tui(targets *targets.TargetListResult, boundaryClient *api.Client, boundaryToken *authtokens.AuthToken) {
 	tuiTargets := make([]list.Item, 0)
 
 	for _, t := range targets.Items {
 		tuiTargets = append(tuiTargets, &Target{title: fmt.Sprintf("%s (%s)", t.Name, t.Scope.Name), description: t.Description, target: t})
 	}
 
-	m := newModel(boundaryClient)
+	m := newModel(boundaryClient, boundaryToken)
 
-	targetDelegate, targetKeyMap := newTargetDelegate(&m)
+	targetDelegate, targetKeyMap := newTargetDelegate()
 	targetList := list.New(tuiTargets, targetDelegate, 0, 0)
 	targetList.SetShowTitle(false)
 	targetList.DisableQuitKeybindings()
-	connectedDelegate, connectedKeyMap := newConnectedDelegate(&m)
+	connectedDelegate, connectedKeyMap := newConnectedDelegate()
 	connectedList := list.New([]list.Item{}, connectedDelegate, 0, 0)
 	connectedList.SetShowTitle(false)
 	connectedList.DisableQuitKeybindings()
-	favoriteDelegate, favoriteKeyMap := newFavoriteDelegate(&m)
+	favoriteDelegate, favoriteKeyMap := newFavoriteDelegate()
 	favoriteList := list.New([]list.Item{}, favoriteDelegate, 0, 0)
 	favoriteList.SetShowTitle(false)
 	favoriteList.DisableQuitKeybindings()
