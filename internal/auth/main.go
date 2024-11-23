@@ -21,10 +21,18 @@ func Command() *cli.Command {
 	command := cli.Command{
 		Name:  "auth",
 		Usage: "Auth Utilities",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "force",
+				Usage:   "force reauthentication",
+				Value:   false,
+				Aliases: []string{"f"},
+			},
+		},
 		Action: func(c *cli.Context) error {
 			auth := &Auth{}
 
-			return auth.Execute(c.Context)
+			return auth.Execute(c)
 		},
 	}
 
@@ -46,12 +54,19 @@ func (a *Auth) getPrimaryAuthMethodId(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("Primary auth method not found in global scope")
 }
 
-func (a *Auth) Execute(ctx context.Context) error {
-	boundaryClient, _, err := client.NewBoundaryClient()
+func (a *Auth) Execute(c *cli.Context) error {
+	boundaryClient, token, err := client.NewBoundaryClient(c.Context)
 	a.boundaryClient = boundaryClient
 
+	if !c.Bool("force") {
+		if token != nil {
+			fmt.Printf("Using cached credentials\n")
+			return nil
+		}
+	}
+
 	a.authClient = authmethods.NewClient(a.boundaryClient)
-	pri, err := a.getPrimaryAuthMethodId(ctx)
+	pri, err := a.getPrimaryAuthMethodId(c.Context)
 	if err != nil {
 		return err
 	}
@@ -62,7 +77,7 @@ func (a *Auth) Execute(ctx context.Context) error {
 			boundaryClient: a.boundaryClient,
 			authClient:     a.authClient,
 		}
-		return oidc.Execute(ctx, pri)
+		return oidc.Execute(c.Context, pri)
 	case strings.HasPrefix(pri, globals.PasswordAuthMethodPrefix):
 		// todo
 		return fmt.Errorf("Password login is not implemented")

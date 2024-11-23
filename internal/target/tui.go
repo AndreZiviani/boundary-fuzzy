@@ -63,7 +63,7 @@ func NewConnect() *Connect {
 }
 
 func (c *Connect) Execute(ctx context.Context) error {
-	boundaryClient, boundaryToken, err := client.NewBoundaryClient()
+	boundaryClient, boundaryToken, err := client.NewBoundaryClient(ctx)
 	c.boundaryClient = boundaryClient
 	if err != nil {
 		return errors.Join(err, fmt.Errorf("\nReauthenticate or provide a token via BOUNDARY_TOKEN env var or -token flag. Reading the token can also be disabled via -keyring-type=none."))

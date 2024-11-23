@@ -1,15 +1,18 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/AndreZiviani/boundary-fuzzy/internal/keyring"
 	"github.com/hashicorp/boundary/api"
 	"github.com/hashicorp/boundary/api/authtokens"
+	"github.com/hashicorp/boundary/api/sessions"
 )
 
-func NewBoundaryClient() (*api.Client, *authtokens.AuthToken, error) {
+func NewBoundaryClient(ctx context.Context) (*api.Client, *authtokens.AuthToken, error) {
 	boundaryAddr := os.Getenv("BOUNDARY_ADDR")
 	if boundaryAddr == "" {
 		return nil, nil, fmt.Errorf("Environment variable BOUNDARY_ADDR is not set")
@@ -27,7 +30,19 @@ func NewBoundaryClient() (*api.Client, *authtokens.AuthToken, error) {
 		// could not retrieve token from keyring
 		return boundaryClient, nil, err
 	}
-	boundaryClient.SetToken(boundaryToken.Token)
+
+	if time.Now().Before(boundaryToken.ExpirationTime) {
+		boundaryClient.SetToken(boundaryToken.Token)
+		sessionsClient := sessions.NewClient(boundaryClient)
+		_, err = sessionsClient.List(ctx, "global", sessions.WithRecursive(true))
+		if err != nil {
+			// token is invalid
+			boundaryClient.SetToken("")
+			boundaryToken = nil
+		}
+	} else {
+		boundaryToken = nil
+	}
 
 	return boundaryClient, boundaryToken, nil
 }
