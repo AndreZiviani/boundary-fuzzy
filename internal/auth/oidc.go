@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/browser"
 	"github.com/AndreZiviani/boundary-fuzzy/internal/keyring"
 	"github.com/hashicorp/boundary/api"
 	"github.com/hashicorp/boundary/api/authmethods"
@@ -32,7 +33,12 @@ func (o *OidcLogin) Execute(ctx context.Context, methodId string) error {
 		return err
 	}
 
-	fmt.Printf("Open the following URL in your browser to authenticate:\n%s\n", startResp.AuthUrl)
+	err = browser.OpenURL(startResp.AuthUrl)
+	if err != nil {
+		fmt.Printf("Failed to automatically open authentication link, please open this link:\n\n%s\n", startResp.AuthUrl)
+	} else {
+		fmt.Printf("Please finish the authentication process on your browser\n")
+	}
 
 	var watchCode int
 	wg := new(sync.WaitGroup)
