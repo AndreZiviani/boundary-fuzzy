@@ -13,7 +13,7 @@ func (t *tui) HandleConnectedUpdate(msg tea.Msg) (bool, tea.Cmd) {
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				i.session.Terminate(t.ctx, i.task)
 				i.session = nil
-				_, err := i.Connect()
+				_, err := i.Connect(t.ctx)
 				if err != nil {
 					t.SetStateAndMessage(errorView, err.Error())
 				}

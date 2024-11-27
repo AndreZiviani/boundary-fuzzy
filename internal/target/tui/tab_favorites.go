@@ -36,7 +36,7 @@ func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
 
 		case key.Matches(msg, t.favoriteKeyMap.Connect):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				_, err := i.Connect()
+				_, err := i.Connect(t.ctx)
 				if err != nil {
 					t.SetStateAndMessage(errorView, err.Error())
 					return true, nil

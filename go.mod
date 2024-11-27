@@ -13,14 +13,19 @@ require (
 	github.com/zalando/go-keyring v0.2.6
 )
 
-require al.essio.dev/pkg/shellescape v1.5.1 // indirect
+require (
+	al.essio.dev/pkg/shellescape v1.5.1 // indirect
+	github.com/hashicorp/go-secure-stdlib/base62 v0.1.2 // indirect
+	github.com/hashicorp/go-secure-stdlib/temperror v0.1.1 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
+	nhooyr.io/websocket v1.8.10 // indirect
+)
 
 require (
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
-	github.com/alessio/shellescape v1.4.2 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/x/ansi v0.5.2 // indirect
+	github.com/charmbracelet/x/ansi v0.5.2
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/danieljoos/wincred v1.2.2 // indirect

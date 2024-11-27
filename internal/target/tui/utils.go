@@ -1,13 +1,21 @@
 package tui
 
 import (
+	"net"
 	"reflect"
+	"regexp"
+	"strings"
 
 	"github.com/AndreZiviani/boundary-fuzzy/internal/config"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hashicorp/boundary/globals"
 )
+
+// This regular expression is used to find all instances of square brackets within a string.
+// This regular expression is used to remove the square brackets from an IPv6 address.
+var squareBrackets = regexp.MustCompile("\\[|\\]")
 
 func listKeyMap(keymap list.KeyMap) []key.Binding {
 	var bindings []key.Binding
@@ -105,4 +113,19 @@ func filter(teaModel tea.Model, msg tea.Msg) tea.Msg {
 	}
 
 	return msg
+}
+
+// SplitHostPort splits a network address of the form "host:port", "host%zone:port", "[host]:port" or "[host%zone]:port" into host or host%zone and port.
+//
+// A literal IPv6 address in hostport must be enclosed in square brackets, as in "[::1]:80", "[::1%lo0]:80".
+func SplitHostPort(hostport string) (host string, port string, err error) {
+	host, port, err = net.SplitHostPort(hostport)
+	// use the hostport value as a backup when we have a missing port error
+	if err != nil && strings.Contains(err.Error(), globals.MissingPortErrStr) {
+		// incase the hostport value is an ipv6, we must remove the enclosed square
+		// brackets to retain the same behavior as the net.SplitHostPort() method
+		host = squareBrackets.ReplaceAllString(hostport, "")
+		err = nil
+	}
+	return
 }

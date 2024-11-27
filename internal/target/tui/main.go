@@ -39,19 +39,20 @@ func newTui(ctx context.Context, input TuiInput) tui {
 	return m
 }
 
-func Tui(ctx context.Context, targets *targets.TargetListResult, boundaryClient *api.Client, boundaryToken *authtokens.AuthToken) {
+func Tui(ctx context.Context, targetListResult *targets.TargetListResult, boundaryClient *api.Client, boundaryToken *authtokens.AuthToken) {
 	tuiTargets := make([]list.Item, 0)
 	sessionClient := sessions.NewClient(boundaryClient)
+	targetsClient := targets.NewClient(boundaryClient)
 
-	for _, t := range targets.Items {
+	for _, t := range targetListResult.Items {
 		tuiTargets = append(
 			tuiTargets,
 			&Target{
-				title: fmt.Sprintf("%s (%s)", t.Name, t.Scope.Name),
-				description: t.Description,
-				target: t,
+				title:         fmt.Sprintf("%s (%s)", t.Name, t.Scope.Name),
+				description:   t.Description,
+				target:        t,
 				sessionClient: sessionClient,
-
+				targetClient:  targetsClient,
 			})
 	}
 

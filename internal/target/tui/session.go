@@ -1,23 +1,23 @@
 package tui
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
+	"net/netip"
 	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/AndreZiviani/boundary-fuzzy/internal/run"
 	tea "github.com/charmbracelet/bubbletea"
+	apiproxy "github.com/hashicorp/boundary/api/proxy"
 	"github.com/hashicorp/boundary/api/sessions"
 	"github.com/hashicorp/boundary/api/targets"
+	"go.uber.org/atomic"
 )
 
 type Target struct {
+	targetClient  *targets.Client
 	sessionClient *sessions.Client
 	title         string
 	description   string
@@ -31,88 +31,38 @@ func (t Target) Description() string { return t.description }
 func (t Target) FilterValue() string { return t.title }
 
 type SessionInfo struct {
-	sessionClient   *sessions.Client
-	Address         string                       `json:"address"`
-	Port            int                          `json:"port"`
-	Protocol        string                       `json:"protocol"`
-	Expiration      time.Time                    `json:"expiration"`
-	ConnectionLimit int32                        `json:"connection_limit"`
-	SessionId       string                       `json:"session_id"`
-	Credentials     []*targets.SessionCredential `json:"credentials,omitempty"`
+	ctx                context.Context
+	cancel             context.CancelFunc
+	clientProxyCloseCh chan struct{}
+
+	sessionClient *sessions.Client
+
+	authorizationToken string
+	Address            string
+	Port               int
+	Expiration         time.Time
+	ConnectionLimit    int32
+	SessionId          string
+	Credentials        []*targets.SessionCredential
 }
 
-func (t *Target) Connect() (*exec.Cmd, error) {
-	task := run.RunTask("boundary", []string{"connect", "-target-id", t.target.Id, "-format", "json"})
-	t.task = task
-
-	var session SessionInfo
-
-	reader := bufio.NewReader(task.Output)
-	msg, err := reader.ReadString('\n')
+func (t *Target) Connect(mainCtx context.Context) (*exec.Cmd, error) {
+	err := t.newSessionProxy(mainCtx)
 	if err != nil {
-		return nil, fmt.Errorf(msg)
+		return nil, err
 	}
-
-	tmp := strings.NewReader(msg)
-	d := json.NewDecoder(tmp)
-	d.DisallowUnknownFields()
-	err = d.Decode(&session)
-	if err != nil {
-		return nil, fmt.Errorf(msg)
-	}
-
-	t.session = &session
-	t.session.sessionClient = t.sessionClient
 
 	var cmd *exec.Cmd
 	if port, ok := t.target.Attributes["default_port"]; ok {
 		switch int(port.(float64)) {
 		case 5432:
-			// postgres
-			args := []string{
-				"-h", "127.0.0.1",
-				"-p", strconv.Itoa(session.Port),
-				"-d", "postgres",
-			}
-
-			if len(session.Credentials) > 0 {
-				args = append(args, "-U", session.Credentials[0].Secret.Decoded["username"].(string))
-			}
-
-			cmd = exec.Command("psql", args...)
-			cmd.Env = os.Environ()
-
-			if len(session.Credentials) > 0 {
-				cmd.Env = append(cmd.Env, fmt.Sprintf("PGPASSWORD=%s", session.Credentials[0].Secret.Decoded["password"]))
-			}
+			cmd = NewPSQLCommand("127.0.0.1", t.session.Port, t.session.Credentials)
 
 		case 3306:
-			// mysql
-			args := []string{
-				"-A",
-				"-h", "127.0.0.1",
-				"-P", strconv.Itoa(session.Port),
-			}
-
-			if len(session.Credentials) > 0 {
-				args = append(args, "-u", session.Credentials[0].Secret.Decoded["username"].(string))
-			}
-			args = append(args, "information_schema")
-
-			cmd = exec.Command("mysql", args...)
-			cmd.Env = os.Environ()
-
-			if len(session.Credentials) > 0 {
-				cmd.Env = append(cmd.Env, fmt.Sprintf("MYSQL_PWD=%s", session.Credentials[0].Secret.Decoded["password"]))
-			}
+			cmd = NewMySQLCommand("127.0.0.1", t.session.Port, t.session.Credentials)
 
 		case 6379:
-			// redis
-			cmd = exec.Command(
-				"redis-cli",
-				"-p", strconv.Itoa(session.Port),
-			)
-			cmd.Env = os.Environ()
+			cmd = NewRedisCommand("127.0.0.1", t.session.Port, t.session.Credentials)
 
 		default:
 			// do nothing, just connect to target
@@ -120,6 +70,90 @@ func (t *Target) Connect() (*exec.Cmd, error) {
 	}
 
 	return cmd, nil
+}
+
+func (t *Target) newSessionProxy(mainCtx context.Context) error {
+	session, err := t.targetClient.AuthorizeSession(mainCtx, t.target.Id)
+	if err != nil {
+		return err
+	}
+
+	auth, err := session.GetSessionAuthorization()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(mainCtx)
+	si := &SessionInfo{
+		ctx:    ctx,
+		cancel: cancel,
+
+		sessionClient:      t.sessionClient,
+		authorizationToken: auth.AuthorizationToken,
+		Expiration:         auth.Expiration,
+		ConnectionLimit:    auth.ConnectionLimit,
+		SessionId:          auth.SessionId,
+		Credentials:        auth.Credentials,
+	}
+
+	addr, err := netip.ParseAddr("127.0.0.1")
+	if err != nil {
+		return err
+	}
+
+	listenAddr := netip.AddrPortFrom(addr, 0)
+
+	connsLeftCh := make(chan int32)
+	apiProxyOpts := []apiproxy.Option{
+		apiproxy.WithConnectionsLeftCh(connsLeftCh),
+		apiproxy.WithListenAddrPort(listenAddr),
+	}
+
+	clientProxy, err := apiproxy.New(
+		ctx,
+		auth.AuthorizationToken,
+		apiProxyOpts...,
+	)
+	if err != nil {
+		return err
+	}
+
+	clientProxyCloseCh := make(chan struct{})
+	connCountCloseCh := make(chan struct{})
+
+	proxyError := new(atomic.Error)
+	go func() {
+		defer close(clientProxyCloseCh)
+		proxyError.Store(clientProxy.Start())
+	}()
+	go func() {
+		defer close(connCountCloseCh)
+		for {
+			select {
+			case <-ctx.Done():
+				// When the proxy exits it will cancel this even if we haven't
+				// done it manually
+				return
+			case connsLeft := <-connsLeftCh:
+				if connsLeft == 0 {
+					return
+				}
+			}
+		}
+	}()
+
+	proxyAddr := clientProxy.ListenerAddress(ctx)
+	clientProxyHost, clientProxyPort, err := SplitHostPort(proxyAddr)
+	if err != nil {
+		return err
+	}
+
+	si.Address = clientProxyHost
+	si.Port, _ = strconv.Atoi(clientProxyPort)
+	si.clientProxyCloseCh = clientProxyCloseCh
+
+	t.session = si
+	return nil
 }
 
 func (t Target) Info() string {
@@ -155,19 +189,18 @@ func (t Target) Info() string {
 }
 
 func (s *SessionInfo) Terminate(ctx context.Context, task *run.Task) {
-	task.Cancel()
+	s.cancel()
+
 	sessionInfo, err := s.sessionClient.Read(ctx, s.SessionId)
 	if err != nil {
 		return
 	}
 
 	s.sessionClient.Cancel(ctx, s.SessionId, sessionInfo.Item.Version)
-
-	task.Cmd.Wait()
 }
 
 func (t *Target) Shell(ctx context.Context, callbackFn tea.ExecCallback) (tea.Cmd, error) {
-	cmd, err := t.Connect()
+	cmd, err := t.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -185,9 +218,6 @@ func (t *Target) Shell(ctx context.Context, callbackFn tea.ExecCallback) (tea.Cm
 			t.session.Terminate(ctx, t.task)
 			if err != nil {
 				return callbackFn(err)
-				// m.previousState = m.state
-				// m.state = errorView
-				// m.message = err.Error()
 			}
 			return nil
 		},
