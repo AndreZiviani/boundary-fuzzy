@@ -28,7 +28,7 @@ builds:
     main: ./cmd/boundary-fuzzy/main.go
   - id: "macos"
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     goos:
       - darwin
     goarch:
@@ -36,20 +36,6 @@ builds:
       - arm64
     main: ./cmd/boundary-fuzzy/main.go
     flags: -buildmode=pie
-    overrides:
-      - goos: darwin
-        goarch: amd64
-        goamd64: v1
-        env:
-          - CGO_LDFLAGS=-mmacosx-version-min=10.14 --sysroot /home/runner/work/boundary-fuzzy/sdk -F/System/Library/Frameworks -L/usr/lib
-          - CC=zig cc -target x86_64-macos-gnu -isysroot /home/runner/work/boundary-fuzzy/sdk -iwithsysroot /usr/include -iframeworkwithsysroot /System/Library/Frameworks
-          - CXX=zig c++ -target x86_64-macos-gnu -isysroot /home/runner/work/boundary-fuzzy/sdk -iwithsysroot /usr/include -iframeworkwithsysroot /System/Library/Frameworks
-      - goos: darwin
-        goarch: arm64
-        env:
-          - CGO_LDFLAGS=-mmacosx-version-min=11.1 --sysroot /home/runner/work/boundary-fuzzy/sdk -F/System/Library/Frameworks -L/usr/lib
-          - CC=zig cc -target aarch64-macos-gnu -isysroot /home/runner/work/boundary-fuzzy/sdk -iwithsysroot /usr/include -iframeworkwithsysroot /System/Library/Frameworks
-          - CXX=zig c++ -target aarch64-macos-gnu -isysroot /home/runner/work/boundary-fuzzy/sdk -iwithsysroot /usr/include -iframeworkwithsysroot /System/Library/Frameworks
 archives:
   - format: binary
 checksum:
