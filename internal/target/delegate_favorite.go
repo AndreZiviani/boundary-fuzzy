@@ -48,7 +48,7 @@ func newFavoriteKeyMap() *favoriteKeyMap {
 	}
 }
 
-func newFavoriteDelegate(model *mainModel) (list.DefaultDelegate, *favoriteKeyMap) {
+func newFavoriteDelegate() (list.DefaultDelegate, *favoriteKeyMap) {
 	d := list.NewDefaultDelegate()
 
 	keys := newFavoriteKeyMap()

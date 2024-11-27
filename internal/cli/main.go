@@ -4,13 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/AndreZiviani/boundary-fuzzy/internal/auth"
 	"github.com/AndreZiviani/boundary-fuzzy/internal/target"
 
-	//"github.com/AndreZiviani/boundary-fuzzy/internal/ssh"
-	//"github.com/AndreZiviani/boundary-fuzzy/internal/chart"
-	//"github.com/AndreZiviani/boundary-fuzzy/internal/config"
-	//"github.com/AndreZiviani/boundary-fuzzy/internal/ssm"
-	//"github.com/AndreZiviani/boundary-fuzzy/internal/sso"
 	"github.com/urfave/cli/v2"
 )
 
@@ -37,13 +33,7 @@ func Run() error {
 		HideVersion: false,
 		Commands: []*cli.Command{
 			target.Command(),
-			/*
-				ssh.Command(),
-				config.Command(),
-				chart.Command(),
-				sso.Command(),
-				ssm.Command(),
-			*/
+			auth.Command(),
 		},
 		EnableBashCompletion: true,
 	}

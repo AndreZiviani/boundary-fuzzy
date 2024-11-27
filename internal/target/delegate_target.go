@@ -62,7 +62,7 @@ func newTargetKeyMap() *targetKeyMap {
 	}
 }
 
-func newTargetDelegate(model *mainModel) (list.DefaultDelegate, *targetKeyMap) {
+func newTargetDelegate() (list.DefaultDelegate, *targetKeyMap) {
 	d := list.NewDefaultDelegate()
 
 	keys := newTargetKeyMap()
