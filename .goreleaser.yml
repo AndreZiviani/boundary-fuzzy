@@ -1,3 +1,5 @@
+version: 2
+
 # This is an example .goreleaser.yml file with some sane defaults.
 # Make sure to check the documentation at http://goreleaser.com
 before:
@@ -15,9 +17,11 @@ builds:
       - arm
       - arm64
     goarm:
-      - 6
-      - 7
+      - "6"
+      - "7"
     main: ./cmd/boundary-fuzzy/main.go
+    ldflags:
+      - -X github.com/AndreZiviani/boundary-fuzzy/internal/cli.version={{.Version}}
   - id: "windows"
     env:
       - CGO_ENABLED=0
@@ -26,9 +30,11 @@ builds:
     goarch:
       - amd64
     main: ./cmd/boundary-fuzzy/main.go
+    ldflags:
+      - -X github.com/AndreZiviani/boundary-fuzzy/internal/cli.version={{.Version}}
   - id: "macos"
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     goos:
       - darwin
     goarch:
@@ -36,6 +42,20 @@ builds:
       - arm64
     main: ./cmd/boundary-fuzzy/main.go
     flags: -buildmode=pie
+    ldflags:
+      - -s -w -X github.com/AndreZiviani/boundary-fuzzy/internal/cli.version={{.Version}}
+    overrides:
+      - goos: darwin
+        goarch: amd64
+        goamd64: v1
+        env:
+          - CGO_LDFLAGS=--sysroot=/home/runner/work/boundary-fuzzy/sdk -F/System/Library/Frameworks -L/usr/lib
+          - CC=zig cc -target x86_64-macos-none -I /home/runner/work/boundary-fuzzy/sdk/usr/include -F /home/runner/work/boundary-fuzzy/sdk/System/Library/Frameworks -L /usr/lib -Wno-availability -Wno-expansion-to-defined -Wno-nullability-completeness
+      - goos: darwin
+        goarch: arm64
+        env:
+          - CGO_LDFLAGS=--sysroot=/home/runner/work/boundary-fuzzy/sdk -F/System/Library/Frameworks -L/usr/lib
+          - CC=zig cc -target aarch64-macos-none -I /home/runner/work/boundary-fuzzy/sdk/usr/include -F /home/runner/work/boundary-fuzzy/sdk/System/Library/Frameworks -L /usr/lib -Wno-availability -Wno-expansion-to-defined -Wno-nullability-completeness
 archives:
   - format: binary
 checksum:
