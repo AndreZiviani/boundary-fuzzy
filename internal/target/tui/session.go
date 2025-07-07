@@ -17,17 +17,34 @@ import (
 )
 
 type Target struct {
-	targetClient  *targets.Client
-	sessionClient *sessions.Client
-	title         string
-	description   string
-	target        *targets.Target
-	session       *SessionInfo
-	task          *run.Task
+	targetClient   *targets.Client
+	sessionsClient *sessions.Client
+	title          string
+	rtitle         string
+	description    string
+	rdescription   string
+	target         *targets.Target
+	session        *SessionInfo
+	task           *run.Task
 }
 
-func (t Target) Title() string       { return t.title }
-func (t Target) Description() string { return t.description }
+func (t Target) Title(tab sessionState) (string, string) {
+	switch tab {
+	case connectedView:
+		return t.title, t.rtitle
+	}
+
+	return t.title, ""
+}
+func (t Target) Description(tab sessionState) (string, string) {
+	switch tab {
+	case connectedView:
+		return t.description, t.rdescription
+	}
+
+	return t.description, ""
+}
+
 func (t Target) FilterValue() string { return t.title }
 
 type SessionInfo struct {
@@ -88,7 +105,7 @@ func (t *Target) newSessionProxy(mainCtx context.Context) error {
 		ctx:    ctx,
 		cancel: cancel,
 
-		sessionClient:      t.sessionClient,
+		sessionClient:      t.sessionsClient,
 		authorizationToken: auth.AuthorizationToken,
 		Expiration:         auth.Expiration,
 		ConnectionLimit:    auth.ConnectionLimit,
@@ -153,6 +170,10 @@ func (t *Target) newSessionProxy(mainCtx context.Context) error {
 	si.clientProxyCloseCh = clientProxyCloseCh
 
 	t.session = si
+
+	t.rtitle = fmt.Sprintf("(%s)", clientProxyPort)
+	t.rdescription = fmt.Sprintf("(%s)", si.Expiration.Local().Format(time.RFC3339))
+
 	return nil
 }
 
@@ -166,12 +187,18 @@ func (t Target) Info() string {
 	)
 
 	if t.session != nil {
+		status := "running"
+		if t.session.ctx.Err() != nil {
+			status = t.session.ctx.Err().Error()
+		}
+
 		msg = fmt.Sprintf(
 			"%s\n"+
 				"Port: %d\n"+
 				"Expiration: %s\n"+
-				"Session Id: %s\n",
-			msg, t.session.Port, t.session.Expiration, t.session.SessionId,
+				"Session Id: %s\n"+
+				"Status: %s\n",
+			msg, t.session.Port, t.session.Expiration, t.session.SessionId, status,
 		)
 
 		if len(t.session.Credentials) > 0 {

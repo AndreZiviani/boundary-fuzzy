@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hashicorp/boundary/api"
 	"github.com/hashicorp/boundary/api/authtokens"
+	"github.com/hashicorp/boundary/api/sessions"
+	"github.com/hashicorp/boundary/api/targets"
 )
 
 // sessionState is used to track which model is focused
@@ -21,12 +23,14 @@ type tui struct {
 	previousState   sessionState
 	index           int
 	tabs            []*list.Model
-	targetKeyMap    *TargetKeyMap
-	connectedKeyMap *ConnectedKeyMap
-	favoriteKeyMap  *FavoriteKeyMap
+	targetKeyMap    *DelegateKeyMap
+	connectedKeyMap *DelegateKeyMap
+	favoriteKeyMap  *DelegateKeyMap
 
 	tabsName       []string
 	boundaryClient *api.Client
+	targetsClient  *targets.Client
+	sessionsClient *sessions.Client
 	boundaryToken  *authtokens.AuthToken
 
 	width      int
@@ -99,8 +103,7 @@ func (t tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "q", "ctrl+c":
-			t.SetState(quittingView)
-			return t, tea.Quit
+			return t.gracefullyQuit(msg)
 
 		case "tab":
 			t.GoNextTab()

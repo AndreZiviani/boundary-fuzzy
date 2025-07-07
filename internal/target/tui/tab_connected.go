@@ -9,7 +9,7 @@ func (t *tui) HandleConnectedUpdate(msg tea.Msg) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, t.connectedKeyMap.Reconnect):
+		case key.Matches(msg, t.connectedKeyMap.binding["reconnect"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				i.session.Terminate(t.ctx, i.task)
 				i.session = nil
@@ -20,7 +20,7 @@ func (t *tui) HandleConnectedUpdate(msg tea.Msg) (bool, tea.Cmd) {
 				return true, nil
 			}
 
-		case key.Matches(msg, t.connectedKeyMap.Disconnect):
+		case key.Matches(msg, t.connectedKeyMap.binding["disconnect"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				i.session.Terminate(t.ctx, i.task)
 				i.session = nil
@@ -30,13 +30,13 @@ func (t *tui) HandleConnectedUpdate(msg tea.Msg) (bool, tea.Cmd) {
 				return true, nil
 			}
 
-		case key.Matches(msg, t.connectedKeyMap.Info):
+		case key.Matches(msg, t.connectedKeyMap.binding["info"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				t.SetStateAndMessage(messageView, i.Info())
 				return true, nil
 			}
 
-		case key.Matches(msg, t.connectedKeyMap.Favorite):
+		case key.Matches(msg, t.connectedKeyMap.binding["favorite"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				t.tabs[favoriteView].InsertItem(len(t.tabs[favoriteView].Items()), i)
 				return true, nil

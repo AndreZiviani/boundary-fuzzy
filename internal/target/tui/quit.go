@@ -7,15 +7,24 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func (t tui) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if len(t.tabs[connectedView].Items()) == 0 {
-		t.shouldQuit = true
-		t.terminateAllSessions()
-		t.saveFavoriteList(t.tabs[favoriteView])
+func (t tui) quit(msg tea.Msg) (tea.Model, tea.Cmd) {
+	t.shouldQuit = true
+	t.saveFavoriteList(t.tabs[favoriteView])
 
-		return t, tea.Quit
+	return t, tea.Quit
+}
+
+func (t tui) gracefullyQuit(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// if there are no active sessions, we can quit immediately
+	if len(t.tabs[connectedView].Items()) == 0 {
+		return t.quit(msg)
 	}
 
+	t.SetState(quittingView)
+	return t, nil
+}
+
+func (t tui) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// For simplicity's sake, we'll treat any key besides "y" as "no"
@@ -31,7 +40,7 @@ func (t tui) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (t tui) HandleQuittingView() string {
-	if len(t.tabs[connectedView].Items()) != 0 {
+	if len(t.tabs[connectedView].Items()) == 0 {
 		return ""
 	}
 

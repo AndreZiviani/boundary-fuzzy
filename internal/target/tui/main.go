@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hashicorp/boundary/api"
@@ -18,9 +19,9 @@ type TuiInput struct {
 	BoundaryToken   *authtokens.AuthToken
 	Tabs            []*list.Model
 	TabsName        []string
-	TargetKeyMap    *TargetKeyMap
-	ConnectedKeyMap *ConnectedKeyMap
-	FavoriteKeyMap  *FavoriteKeyMap
+	TargetKeyMap    *DelegateKeyMap
+	ConnectedKeyMap *DelegateKeyMap
+	FavoriteKeyMap  *DelegateKeyMap
 }
 
 func newTui(ctx context.Context, input TuiInput) tui {
@@ -29,6 +30,8 @@ func newTui(ctx context.Context, input TuiInput) tui {
 		state:           targetsView,
 		previousState:   targetsView,
 		boundaryClient:  input.BoundaryClient,
+		targetsClient:   targets.NewClient(input.BoundaryClient),
+		sessionsClient:  sessions.NewClient(input.BoundaryClient),
 		boundaryToken:   input.BoundaryToken,
 		tabs:            input.Tabs,
 		tabsName:        input.TabsName,
@@ -41,39 +44,85 @@ func newTui(ctx context.Context, input TuiInput) tui {
 
 func Tui(ctx context.Context, targetListResult *targets.TargetListResult, boundaryClient *api.Client, boundaryToken *authtokens.AuthToken) {
 	tuiTargets := make([]list.Item, 0)
-	sessionClient := sessions.NewClient(boundaryClient)
-	targetsClient := targets.NewClient(boundaryClient)
 
-	for _, t := range targetListResult.Items {
-		tuiTargets = append(
-			tuiTargets,
-			&Target{
-				title:         fmt.Sprintf("%s (%s)", t.Name, t.Scope.Name),
-				description:   t.Description,
-				target:        t,
-				sessionClient: sessionClient,
-				targetClient:  targetsClient,
-			})
-	}
-
-	targetDelegate, targetKeyMap := NewTargetDelegate()
+	targetDelegate, targetKeyMap := NewDelegate(map[string]key.Binding{
+		"shell": key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "open a shell"),
+		),
+		"connect": key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "connect to target"),
+		),
+		"favorite": key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "add target to favorites"),
+		),
+		"info": key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "show session info"),
+		),
+		"refresh": key.NewBinding(
+			key.WithKeys("ctrl+r"),
+			key.WithHelp("ctrl+r", "refresh target list"),
+		),
+	}, targetsView)
 	targetList := list.New(tuiTargets, targetDelegate, 0, 0)
 	targetList.SetShowTitle(false)
 	targetList.DisableQuitKeybindings()
-	connectedDelegate, connectedKeyMap := NewConnectedDelegate()
+
+	// connectedDelegate, connectedKeyMap := NewConnectedDelegate()
+	connectedDelegate, connectedKeyMap := NewDelegate(map[string]key.Binding{
+		"disconnect": key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "disconnect from target"),
+		),
+		"reconnect": key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "reconnect to target"),
+		),
+		"info": key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "show session info"),
+		),
+		"favorite": key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "add target to favorites"),
+		),
+	}, connectedView)
 	connectedList := list.New([]list.Item{}, connectedDelegate, 0, 0)
 	connectedList.SetShowTitle(false)
 	connectedList.DisableQuitKeybindings()
-	favoriteDelegate, favoriteKeyMap := NewFavoriteDelegate()
+
+	favoriteDelegate, favoriteKeyMap := NewDelegate(map[string]key.Binding{
+		"shell": key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "open a shell"),
+		),
+		"delete": key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "delete target from favorites"),
+		),
+		"connect": key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "connect to target"),
+		),
+		"up": key.NewBinding(
+			key.WithKeys("+"),
+			key.WithHelp("+", "move target up on list"),
+		),
+		"down": key.NewBinding(
+			key.WithKeys("-"),
+			key.WithHelp("-", "move target down on list"),
+		),
+		"info": key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "show session info"),
+		),
+	}, favoriteView)
 	favoriteList := list.New([]list.Item{}, favoriteDelegate, 0, 0)
 	favoriteList.SetShowTitle(false)
 	favoriteList.DisableQuitKeybindings()
-
-	err := loadFavoriteList(&favoriteList, tuiTargets)
-	if err != nil {
-		fmt.Println("Error running program:", err)
-		os.Exit(1)
-	}
 
 	t := newTui(ctx, TuiInput{
 		BoundaryClient: boundaryClient,
@@ -85,6 +134,12 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		ConnectedKeyMap: connectedKeyMap,
 		FavoriteKeyMap:  favoriteKeyMap,
 	})
+
+	err := t.refreshTargets()
+	if err != nil {
+		fmt.Println("Error running program:", err)
+		os.Exit(1)
+	}
 
 	p := tea.NewProgram(t, tea.WithAltScreen(), tea.WithFilter(filter))
 

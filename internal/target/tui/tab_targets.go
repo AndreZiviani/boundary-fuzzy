@@ -11,7 +11,7 @@ func (t *tui) HandleTargetsUpdate(ctx context.Context, msg tea.Msg) (bool, tea.C
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, t.targetKeyMap.Shell):
+		case key.Matches(msg, t.targetKeyMap.binding["shell"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				cmd, err := i.Shell(ctx, func(err error) tea.Msg {
 					t.SetStateAndMessage(errorView, err.Error())
@@ -25,7 +25,7 @@ func (t *tui) HandleTargetsUpdate(ctx context.Context, msg tea.Msg) (bool, tea.C
 				return true, tea.Sequence(cmd)
 			}
 
-		case key.Matches(msg, t.targetKeyMap.Connect):
+		case key.Matches(msg, t.targetKeyMap.binding["connect"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				// send connect event upstream
 				_, err := i.Connect(t.ctx)
@@ -38,17 +38,21 @@ func (t *tui) HandleTargetsUpdate(ctx context.Context, msg tea.Msg) (bool, tea.C
 				return true, nil
 			}
 
-		case key.Matches(msg, t.targetKeyMap.Favorite):
+		case key.Matches(msg, t.targetKeyMap.binding["favorite"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				t.tabs[favoriteView].InsertItem(len(t.tabs[favoriteView].Items()), i)
 				return true, nil
 			}
 
-		case key.Matches(msg, t.targetKeyMap.Info):
+		case key.Matches(msg, t.targetKeyMap.binding["info"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				t.SetStateAndMessage(messageView, i.Info())
 				return true, nil
 			}
+
+		case key.Matches(msg, t.targetKeyMap.binding["refresh"]):
+			t.refreshTargets()
+			return true, nil
 
 		// Prioritize our keybinding instead of default
 		case key.Matches(msg, listKeyMap(t.CurrentTab().KeyMap)...):

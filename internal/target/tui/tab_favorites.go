@@ -11,7 +11,7 @@ func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, t.favoriteKeyMap.Delete):
+		case key.Matches(msg, t.favoriteKeyMap.binding["delete"]):
 			if _, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				t.CurrentTab().RemoveItem(t.CurrentTab().Index())
 				t.CurrentTab().CursorUp()
@@ -19,7 +19,7 @@ func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
 				return true, nil
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.Shell):
+		case key.Matches(msg, t.favoriteKeyMap.binding["shell"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				cmd, err := i.Shell(t.ctx, func(err error) tea.Msg {
 					t.SetStateAndMessage(errorView, err.Error())
@@ -34,7 +34,7 @@ func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
 				return true, tea.Sequence(cmd)
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.Connect):
+		case key.Matches(msg, t.favoriteKeyMap.binding["connect"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				_, err := i.Connect(t.ctx)
 				if err != nil {
@@ -46,7 +46,7 @@ func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
 				return true, nil
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.MoveUp):
+		case key.Matches(msg, t.favoriteKeyMap.binding["up"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				var cmds []tea.Cmd
 
@@ -67,7 +67,7 @@ func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
 				return true, tea.Sequence(cmds...)
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.MoveDown):
+		case key.Matches(msg, t.favoriteKeyMap.binding["down"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				var cmds []tea.Cmd
 
@@ -89,7 +89,7 @@ func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
 				return true, tea.Sequence(cmds...)
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.Info):
+		case key.Matches(msg, t.favoriteKeyMap.binding["info"]):
 			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
 				t.SetStateAndMessage(messageView, i.Info())
 				return true, nil
@@ -114,7 +114,7 @@ func getTarget(id string, targets []list.Item) list.Item {
 	return nil
 }
 
-func loadFavoriteList(list *list.Model, targets []list.Item) error {
+func (t *tui) refreshFavoriteList() error {
 	config, err := config.NewConfig()
 	if err != nil {
 		return err
@@ -125,12 +125,15 @@ func loadFavoriteList(list *list.Model, targets []list.Item) error {
 		return err
 	}
 
+	favorites := make([]list.Item, 0, len(config.Favorites))
 	for _, v := range config.Favorites {
-		target := getTarget(v, targets)
+		target := getTarget(v, t.tabs[targetsView].Items())
 		if target != nil {
-			list.InsertItem(len(list.Items()), target)
+			favorites = append(favorites, target)
 		}
 	}
+
+	t.tabs[favoriteView].SetItems(favorites)
 
 	return nil
 }
