@@ -43,87 +43,29 @@ func newTui(ctx context.Context, input TuiInput) tui {
 func Tui(ctx context.Context, targetListResult *targets.TargetListResult, boundaryClient *api.Client, boundaryToken *authtokens.AuthToken) {
 	tuiTargets := make([]list.Item, 0)
 
-	targetDelegate, targetKeyMap := NewDelegate(map[string]key.Binding{
-		"shell": key.NewBinding(
-			key.WithKeys("s"),
-			key.WithHelp("s", "open a shell"),
-		),
-		"connect": key.NewBinding(
-			key.WithKeys("c"),
-			key.WithHelp("c", "connect to target"),
-		),
-		"favorite": key.NewBinding(
-			key.WithKeys("f"),
-			key.WithHelp("f", "add target to favorites"),
-		),
-		"info": key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "show session info"),
-		),
-		"refresh": key.NewBinding(
-			key.WithKeys("ctrl+r"),
-			key.WithHelp("ctrl+r", "refresh target list"),
-		),
-	}, targetsView)
-	targetList := list.New(tuiTargets, targetDelegate, 0, 0)
-	targetList.Title = targetsTabName
-	targetList.SetShowTitle(false)
-	targetList.DisableQuitKeybindings()
+	targetList, targetKeyMap := NewList(targetsTabName, targetsView, tuiTargets, map[string]key.Binding{
+		bindingShell.name:    bindingShell.binding,
+		bindingConnect.name:  bindingConnect.binding,
+		bindingFavorite.name: bindingFavorite.binding,
+		bindingInfo.name:     bindingInfo.binding,
+		bindingRefresh.name:  bindingRefresh.binding,
+	})
 
-	// connectedDelegate, connectedKeyMap := NewConnectedDelegate()
-	connectedDelegate, connectedKeyMap := NewDelegate(map[string]key.Binding{
-		"disconnect": key.NewBinding(
-			key.WithKeys("d"),
-			key.WithHelp("d", "disconnect from target"),
-		),
-		"reconnect": key.NewBinding(
-			key.WithKeys("r"),
-			key.WithHelp("r", "reconnect to target"),
-		),
-		"info": key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "show session info"),
-		),
-		"favorite": key.NewBinding(
-			key.WithKeys("f"),
-			key.WithHelp("f", "add target to favorites"),
-		),
-	}, connectedView)
-	connectedList := list.New([]list.Item{}, connectedDelegate, 0, 0)
-	connectedList.Title = connectedTabName
-	connectedList.SetShowTitle(false)
-	connectedList.DisableQuitKeybindings()
+	connectedList, connectedKeyMap := NewList(connectedTabName, connectedView, []list.Item{}, map[string]key.Binding{
+		bindingDisconnect.name: bindingDisconnect.binding,
+		bindingReconnect.name:  bindingReconnect.binding,
+		bindingInfo.name:       bindingInfo.binding,
+		bindingFavorite.name:   bindingFavorite.binding,
+	})
 
-	favoriteDelegate, favoriteKeyMap := NewDelegate(map[string]key.Binding{
-		"shell": key.NewBinding(
-			key.WithKeys("s"),
-			key.WithHelp("s", "open a shell"),
-		),
-		"delete": key.NewBinding(
-			key.WithKeys("d"),
-			key.WithHelp("d", "delete target from favorites"),
-		),
-		"connect": key.NewBinding(
-			key.WithKeys("c"),
-			key.WithHelp("c", "connect to target"),
-		),
-		"up": key.NewBinding(
-			key.WithKeys("+"),
-			key.WithHelp("+", "move target up on list"),
-		),
-		"down": key.NewBinding(
-			key.WithKeys("-"),
-			key.WithHelp("-", "move target down on list"),
-		),
-		"info": key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "show session info"),
-		),
-	}, favoriteView)
-	favoriteList := list.New([]list.Item{}, favoriteDelegate, 0, 0)
-	favoriteList.Title = favoritesTabName
-	favoriteList.SetShowTitle(false)
-	favoriteList.DisableQuitKeybindings()
+	favoriteList, favoriteKeyMap := NewList(favoritesTabName, favoriteView, []list.Item{}, map[string]key.Binding{
+		bindingShell.name:        bindingShell.binding,
+		bindingDelete.name:       bindingDelete.binding,
+		bindingConnect.name:      bindingConnect.binding,
+		bindingFavoriteUp.name:   bindingFavoriteUp.binding,
+		bindingFavoriteDown.name: bindingFavoriteDown.binding,
+		bindingInfo.name:         bindingInfo.binding,
+	})
 
 	t := newTui(ctx, TuiInput{
 		BoundaryClient: boundaryClient,
@@ -147,4 +89,16 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
 	}
+}
+
+func NewList(name string, view sessionState, items []list.Item, bindings map[string]key.Binding) (list.Model, *DelegateKeyMap) {
+	delegate, keyMap := NewDelegate(bindings, view)
+	customList := list.New(items, delegate, 0, 0)
+	customList.Title = name
+	customList.AdditionalShortHelpKeys = keyMap.ShortHelp
+	customList.AdditionalFullHelpKeys = keyMap.ShortHelp
+	customList.SetShowTitle(false)
+	customList.DisableQuitKeybindings()
+
+	return customList, keyMap
 }
