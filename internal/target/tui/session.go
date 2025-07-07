@@ -162,7 +162,17 @@ func (t *Target) newSessionProxy(mainCtx context.Context) error {
 		}
 	}()
 
-	proxyAddr := clientProxy.ListenerAddress(ctx)
+	listenerCtx, listenerCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer listenerCancel()
+	proxyAddr := clientProxy.ListenerAddress(listenerCtx)
+	if listenerCtx.Err() != nil {
+		cancel()
+		proxyErr := proxyError.Load()
+		if proxyErr != nil {
+			return fmt.Errorf("could not start proxy: %w", proxyErr)
+		}
+		return fmt.Errorf("could not start proxy listener: %w", listenerCtx.Err())
+	}
 	clientProxyHost, clientProxyPort, err := SplitHostPort(proxyAddr)
 	if err != nil {
 		return err
