@@ -51,6 +51,7 @@ type SessionInfo struct {
 	ctx                context.Context
 	cancel             context.CancelFunc
 	clientProxyCloseCh chan struct{}
+	active             bool
 
 	sessionClient *sessions.Client
 
@@ -104,6 +105,7 @@ func (t *Target) newSessionProxy(mainCtx context.Context) error {
 	si := &SessionInfo{
 		ctx:    ctx,
 		cancel: cancel,
+		active: true,
 
 		sessionClient:      t.sessionsClient,
 		authorizationToken: auth.AuthorizationToken,
@@ -142,6 +144,7 @@ func (t *Target) newSessionProxy(mainCtx context.Context) error {
 	go func() {
 		defer close(clientProxyCloseCh)
 		proxyError.Store(clientProxy.Start())
+		si.active = false
 	}()
 	go func() {
 		defer close(connCountCloseCh)
@@ -187,9 +190,11 @@ func (t Target) Info() string {
 	)
 
 	if t.session != nil {
-		status := "running"
+		status := "connected"
 		if t.session.ctx.Err() != nil {
 			status = t.session.ctx.Err().Error()
+		} else if !t.session.active {
+			status = "disconnected"
 		}
 
 		msg = fmt.Sprintf(
@@ -249,4 +254,20 @@ func (t *Target) Shell(ctx context.Context, callbackFn tea.ExecCallback) (tea.Cm
 			return nil
 		},
 	), nil
+}
+
+func (t *Target) IsConnected() bool {
+	if t.session == nil {
+		return false
+	}
+
+	if t.session.ctx.Err() != nil {
+		return false
+	}
+
+	if !t.session.active {
+		return false
+	}
+
+	return true
 }

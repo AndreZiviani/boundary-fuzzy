@@ -23,6 +23,7 @@ var (
 	activeTabStyle    = inactiveTabStyle.Border(activeTabBorder, true).Bold(true).Faint(false)
 	inactiveTabBorder = tabBorderWithBottom("┴", "─", "┴")
 	inactiveTabStyle  = lipgloss.NewStyle().Border(inactiveTabBorder, true).BorderForeground(highlightColor).Padding(0, 1).Faint(true)
+	strikethroughStyle = lipgloss.NewStyle().Strikethrough(true)
 )
 
 func tabBorderWithBottom(left, middle, right string) lipgloss.Border {

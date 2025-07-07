@@ -15,8 +15,18 @@ func (t tui) quit(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (t tui) gracefullyQuit(msg tea.Msg) (tea.Model, tea.Cmd) {
+	sessions := 0
+
 	// if there are no active sessions, we can quit immediately
-	if len(t.tabs[connectedView].Items()) == 0 {
+	for _, item := range t.tabs[connectedView].Items() {
+		if target, ok := item.(*Target); ok {
+			if target.IsConnected() {
+				sessions++
+			}
+		}
+	}
+
+	if sessions == 0 {
 		return t.quit(msg)
 	}
 
@@ -40,14 +50,22 @@ func (t tui) quittingUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (t tui) HandleQuittingView() string {
-	if len(t.tabs[connectedView].Items()) == 0 {
-		return ""
+	// if we get here, it means we have active sessions
+	sessions := 0
+
+	// check if there are any active sessions
+	for _, item := range t.tabs[connectedView].Items() {
+		if target, ok := item.(*Target); ok {
+			if target.IsConnected() {
+				sessions++
+			}
+		}
 	}
 
 	text := alertViewStyle.Render(
 		lipgloss.JoinHorizontal(
 			lipgloss.Left,
-			fmt.Sprintf("You have %d active session(s), terminate every session and quit?", len(t.tabs[connectedView].Items())),
+			fmt.Sprintf("You have %d active session(s), terminate every session and quit?", sessions),
 			choiceStyle.Render("[y/N]"),
 		),
 	)

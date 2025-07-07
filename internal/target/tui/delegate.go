@@ -89,8 +89,7 @@ func (td targetDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 
 func (td targetDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var (
-		matchedRunes []int
-		s            = &td.Styles
+		s = &td.Styles
 	)
 
 	target, ok := item.(*Target)
@@ -149,21 +148,39 @@ func (td targetDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		desc = strings.Join(lines, "\n")
 	}
 
+	title, desc = renderCustomItem(m, index, item, title, desc, s)
+
+	if td.ShowDescription {
+		fmt.Fprintf(w, "%s\n%s", title, desc) //nolint: errcheck
+		return
+	}
+	fmt.Fprintf(w, "%s", title) //nolint: errcheck
+}
+
+func renderCustomItem(m list.Model, index int, item list.Item, title, desc string, s *list.DefaultItemStyles) (string, string) {
 	// Conditions
 	var (
-		isSelected  = index == m.Index()
-		emptyFilter = m.FilterState() == list.Filtering && m.FilterValue() == ""
-		isFiltered  = m.FilterState() == list.Filtering || m.FilterState() == list.FilterApplied
+		matchedRunes []int
+		isSelected   = index == m.Index()
+		emptyFilter  = m.FilterState() == list.Filtering && m.FilterValue() == ""
+		isFiltered   = m.FilterState() == list.Filtering || m.FilterState() == list.FilterApplied
+
+		titleStyle lipgloss.Style
+		descStyle  lipgloss.Style
+		active     = true
 	)
+
+	if target, ok := item.(*Target); ok {
+		active = target.IsConnected()
+	}
 
 	if isFiltered && index < len(m.VisibleItems()) {
 		// Get indices of matched characters
 		matchedRunes = m.MatchesForItem(index)
 	}
-
 	if emptyFilter {
-		title = s.DimmedTitle.Render(title)
-		desc = s.DimmedDesc.Render(desc)
+		titleStyle = s.DimmedTitle
+		descStyle = s.DimmedDesc
 	} else if isSelected && m.FilterState() != list.Filtering {
 		if isFiltered {
 			// Highlight matches
@@ -171,8 +188,8 @@ func (td targetDelegate) Render(w io.Writer, m list.Model, index int, item list.
 			matched := unmatched.Inherit(s.FilterMatch)
 			title = lipgloss.StyleRunes(title, matchedRunes, matched, unmatched)
 		}
-		title = s.SelectedTitle.Render(title)
-		desc = s.SelectedDesc.Render(desc)
+		titleStyle = s.SelectedTitle
+		descStyle = s.SelectedDesc
 	} else {
 		if isFiltered {
 			// Highlight matches
@@ -180,13 +197,16 @@ func (td targetDelegate) Render(w io.Writer, m list.Model, index int, item list.
 			matched := unmatched.Inherit(s.FilterMatch)
 			title = lipgloss.StyleRunes(title, matchedRunes, matched, unmatched)
 		}
-		title = s.NormalTitle.Render(title)
-		desc = s.NormalDesc.Render(desc)
+		titleStyle = s.NormalTitle
+		descStyle = s.NormalDesc
 	}
 
-	if td.ShowDescription {
-		fmt.Fprintf(w, "%s\n%s", title, desc) //nolint: errcheck
-		return
+	// If the title is "connected", apply strikethrough if not active
+	if m.Title == connectedTabName {
+		if !active {
+			titleStyle = titleStyle.Strikethrough(true).Foreground(s.DimmedTitle.GetForeground())
+		}
 	}
-	fmt.Fprintf(w, "%s", title) //nolint: errcheck
+
+	return titleStyle.Render(title), descStyle.Render(desc)
 }

@@ -18,7 +18,6 @@ type TuiInput struct {
 	BoundaryClient  *api.Client
 	BoundaryToken   *authtokens.AuthToken
 	Tabs            []*list.Model
-	TabsName        []string
 	TargetKeyMap    *DelegateKeyMap
 	ConnectedKeyMap *DelegateKeyMap
 	FavoriteKeyMap  *DelegateKeyMap
@@ -34,7 +33,6 @@ func newTui(ctx context.Context, input TuiInput) tui {
 		sessionsClient:  sessions.NewClient(input.BoundaryClient),
 		boundaryToken:   input.BoundaryToken,
 		tabs:            input.Tabs,
-		tabsName:        input.TabsName,
 		targetKeyMap:    input.TargetKeyMap,
 		connectedKeyMap: input.ConnectedKeyMap,
 		favoriteKeyMap:  input.FavoriteKeyMap,
@@ -68,6 +66,7 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		),
 	}, targetsView)
 	targetList := list.New(tuiTargets, targetDelegate, 0, 0)
+	targetList.Title = targetsTabName
 	targetList.SetShowTitle(false)
 	targetList.DisableQuitKeybindings()
 
@@ -91,6 +90,7 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		),
 	}, connectedView)
 	connectedList := list.New([]list.Item{}, connectedDelegate, 0, 0)
+	connectedList.Title = connectedTabName
 	connectedList.SetShowTitle(false)
 	connectedList.DisableQuitKeybindings()
 
@@ -121,6 +121,7 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		),
 	}, favoriteView)
 	favoriteList := list.New([]list.Item{}, favoriteDelegate, 0, 0)
+	favoriteList.Title = favoritesTabName
 	favoriteList.SetShowTitle(false)
 	favoriteList.DisableQuitKeybindings()
 
@@ -129,7 +130,6 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		BoundaryToken:  boundaryToken,
 
 		Tabs:            []*list.Model{&targetList, &connectedList, &favoriteList},
-		TabsName:        []string{"Targets", "Connected", "Favorites"},
 		TargetKeyMap:    targetKeyMap,
 		ConnectedKeyMap: connectedKeyMap,
 		FavoriteKeyMap:  favoriteKeyMap,

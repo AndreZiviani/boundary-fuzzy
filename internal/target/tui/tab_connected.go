@@ -5,6 +5,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const (
+	connectedTabName = "Connected"
+)
+
 func (t *tui) HandleConnectedUpdate(msg tea.Msg) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:

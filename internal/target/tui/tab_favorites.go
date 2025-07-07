@@ -7,6 +7,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const (
+	favoritesTabName = "Favorites"
+)
+
 func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:

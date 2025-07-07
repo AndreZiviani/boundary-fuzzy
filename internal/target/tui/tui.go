@@ -27,7 +27,6 @@ type tui struct {
 	connectedKeyMap *DelegateKeyMap
 	favoriteKeyMap  *DelegateKeyMap
 
-	tabsName       []string
 	boundaryClient *api.Client
 	targetsClient  *targets.Client
 	sessionsClient *sessions.Client
@@ -207,7 +206,7 @@ func (t *tui) RenderTabs() []string {
 		renderedTabs = append(
 			renderedTabs,
 			style.Render(
-				fmt.Sprintf("%s (%d)", t.tabsName[i], len(t.tabs[i].Items())),
+				fmt.Sprintf("%s (%d)", t.tabs[i].Title, len(t.tabs[i].Items())),
 			),
 		)
 	}

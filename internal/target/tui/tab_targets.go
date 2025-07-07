@@ -7,6 +7,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const (
+	targetsTabName = "Targets"
+)
+
 func (t *tui) HandleTargetsUpdate(ctx context.Context, msg tea.Msg) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
