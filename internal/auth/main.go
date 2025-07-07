@@ -55,36 +55,49 @@ func (a *Auth) getPrimaryAuthMethodId(ctx context.Context) (string, error) {
 }
 
 func (a *Auth) Execute(c *cli.Context) error {
-	boundaryClient, token, err := client.NewBoundaryClient(c.Context)
-	a.boundaryClient = boundaryClient
+	_, err := Login(c.Context, c.Bool("force"))
+	return err
+}
 
-	if !c.Bool("force") {
+func Login(ctx context.Context, force bool) (string, error) {
+	boundaryClient, token, err := client.NewBoundaryClient(ctx)
+	auth := &Auth{
+		boundaryClient: boundaryClient,
+		authClient:     authmethods.NewClient(boundaryClient),
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	if !force {
 		if token != nil {
 			fmt.Printf("Using cached credentials\n")
-			return nil
+			return token.Token, nil
 		}
 	}
 
-	a.authClient = authmethods.NewClient(a.boundaryClient)
-	pri, err := a.getPrimaryAuthMethodId(c.Context)
+	pri, err := auth.getPrimaryAuthMethodId(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	switch {
 	case strings.HasPrefix(pri, globals.OidcAuthMethodPrefix):
-		oidc := &OidcLogin{
-			boundaryClient: a.boundaryClient,
-			authClient:     a.authClient,
+		result, err := auth.OIDCLogin(ctx, pri)
+		if err != nil || result == nil {
+			return "", err
 		}
-		return oidc.Execute(c.Context, pri)
+		return result.Token, nil
+
 	case strings.HasPrefix(pri, globals.PasswordAuthMethodPrefix):
 		// todo
-		return fmt.Errorf("Password login is not implemented")
+		return "", fmt.Errorf("Password login is not implemented")
 	case strings.HasPrefix(pri, globals.LdapAuthMethodPrefix):
 		// todo
-		return fmt.Errorf("LDAP login is not implemented")
+		return "", fmt.Errorf("LDAP login is not implemented")
 	}
 
-	return fmt.Errorf("Unknown auth method type")
+	return "", fmt.Errorf("Unknown auth method type")
+
 }

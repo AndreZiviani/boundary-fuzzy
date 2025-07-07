@@ -8,29 +8,25 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/browser"
 	"github.com/AndreZiviani/boundary-fuzzy/internal/keyring"
 	"github.com/hashicorp/boundary/api"
 	"github.com/hashicorp/boundary/api/authmethods"
+	"github.com/hashicorp/boundary/api/authtokens"
+	"github.com/pkg/browser"
 )
 
-type OidcLogin struct {
-	boundaryClient *api.Client
-	authClient     *authmethods.Client
-}
-
-func (o *OidcLogin) Execute(ctx context.Context, methodId string) error {
-	result, err := o.authClient.Authenticate(ctx, methodId, "start", nil)
+func (a *Auth) OIDCLogin(ctx context.Context, methodId string) (*authtokens.AuthToken, error) {
+	result, err := a.authClient.Authenticate(ctx, methodId, "start", nil)
 	if err != nil {
 		if apiErr := api.AsServerError(err); apiErr != nil {
-			return apiErr
+			return nil, apiErr
 		}
-		return err
+		return nil, err
 	}
 
 	startResp := new(authmethods.OidcAuthMethodAuthenticateStartResponse)
 	if err := json.Unmarshal(result.GetRawAttributes(), startResp); err != nil {
-		return err
+		return nil, err
 	}
 
 	err = browser.OpenURL(startResp.AuthUrl)
@@ -48,7 +44,7 @@ func (o *OidcLogin) Execute(ctx context.Context, methodId string) error {
 		for {
 			select {
 			case <-time.After(1500 * time.Millisecond):
-				result, err = o.authClient.Authenticate(ctx, methodId, "token", map[string]any{
+				result, err = a.authClient.Authenticate(ctx, methodId, "token", map[string]any{
 					"token_id": startResp.TokenId,
 				})
 				if err != nil {
@@ -71,11 +67,12 @@ func (o *OidcLogin) Execute(ctx context.Context, methodId string) error {
 	wg.Wait()
 
 	if watchCode != 0 {
-		return fmt.Errorf("Error watching for code: %d", watchCode)
+		return nil, fmt.Errorf("Error watching for code: %d", watchCode)
 	}
 	if result == nil {
-		return fmt.Errorf("No response from the server")
+		return nil, fmt.Errorf("No response from the server")
 	}
 
-	return keyring.SaveTokenToKeyring(result)
+	_ = keyring.SaveTokenToKeyring(result)
+	return result.GetAuthToken()
 }

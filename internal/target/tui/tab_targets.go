@@ -55,7 +55,11 @@ func (t *tui) HandleTargetsUpdate(ctx context.Context, msg tea.Msg) (bool, tea.C
 			}
 
 		case key.Matches(msg, t.targetKeyMap.binding["refresh"]):
-			t.refreshTargets()
+			err := t.refreshTargets()
+			if err != nil {
+				t.SetStateAndMessage(errorView, err.Error())
+			}
+
 			return true, nil
 
 		// Prioritize our keybinding instead of default
