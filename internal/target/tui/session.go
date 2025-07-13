@@ -64,8 +64,8 @@ type SessionInfo struct {
 	Credentials        []*targets.SessionCredential
 }
 
-func (t *Target) Connect(mainCtx context.Context) (*exec.Cmd, error) {
-	err := t.newSessionProxy(mainCtx)
+func (t *Target) Connect() (*exec.Cmd, error) {
+	err := t.newSessionProxy(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +230,8 @@ func (t Target) Info() string {
 	return msg
 }
 
-func (s *SessionInfo) Terminate(ctx context.Context, task *run.Task) {
+func (s *SessionInfo) Terminate(task *run.Task) {
+	ctx := context.Background()
 	s.cancel()
 
 	sessionInfo, err := s.sessionClient.Read(ctx, s.SessionId)
@@ -241,8 +242,8 @@ func (s *SessionInfo) Terminate(ctx context.Context, task *run.Task) {
 	s.sessionClient.Cancel(ctx, s.SessionId, sessionInfo.Item.Version)
 }
 
-func (t *Target) Shell(ctx context.Context, callbackFn tea.ExecCallback) (tea.Cmd, error) {
-	cmd, err := t.Connect(ctx)
+func (t *Target) Shell(callbackFn tea.ExecCallback) (tea.Cmd, error) {
+	cmd, err := t.Connect()
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +258,7 @@ func (t *Target) Shell(ctx context.Context, callbackFn tea.ExecCallback) (tea.Cm
 	return tea.ExecProcess(
 		cmd,
 		func(err error) tea.Msg {
-			t.session.Terminate(ctx, t.task)
+			t.session.Terminate(t.task)
 			if err != nil {
 				return callbackFn(err)
 			}

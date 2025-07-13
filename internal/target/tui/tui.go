@@ -21,7 +21,6 @@ type tui struct {
 	ctx             context.Context
 	state           sessionState
 	previousState   sessionState
-	index           int
 	tabs            []*list.Model
 	targetKeyMap    *DelegateKeyMap
 	connectedKeyMap *DelegateKeyMap
@@ -52,48 +51,23 @@ func (t tui) Init() tea.Cmd {
 }
 
 func (t tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-	var cmd tea.Cmd
-	matched := false
-
 	switch t.state {
 	case errorView, messageView:
 		return t.messageUpdate(msg)
 	case quittingView:
 		return t.quittingUpdate(msg)
-	case targetsView:
-		// Don't match any of the keys below if we're actively filtering.
-		if t.InFilterState() {
-			break
-		}
-
-		matched, cmd = t.HandleTargetsUpdate(t.ctx, msg)
-
-	case connectedView:
-		// Don't match any of the keys below if we're actively filtering.
-		if t.InFilterState() {
-			break
-		}
-
-		matched, cmd = t.HandleConnectedUpdate(msg)
-
-	case favoriteView:
-		// Don't match any of the keys below if we're actively filtering.
-		if t.InFilterState() {
-			break
-		}
-
-		matched, cmd = t.HandleFavoritesUpdate(msg)
-	}
-
-	if matched {
-		return t, cmd
 	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		t.width = msg.Width
 		t.height = msg.Height
+
+		// remove tabs and borders from the window size message
+		msg.Height -= 4
+		msg.Width -= 2
+
+		return t, t.UpdateTabs(msg)
 	case tea.KeyMsg:
 		// Don't match any of the keys below if we're actively filtering.
 		if t.InFilterState() {
@@ -106,14 +80,29 @@ func (t tui) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "tab":
 			t.GoNextTab()
-			cmds = append(cmds, func() tea.Msg { return tea.ClearScreen() })
+			return t, func() tea.Msg { return tea.ClearScreen() }
+		default:
+			// only send custom messages to the current tab
+			m, cmd := t.CurrentTab().Update(msg)
+			t.tabs[t.state] = &m
+			return t, cmd
 		}
+
+	case msgError:
+		t.SetStateAndMessage(errorView, msg.err.Error())
+		return t, nil
+
+	case msgInfo:
+		t.SetStateAndMessage(messageView, msg.target.Info())
+		return t, nil
+
+	default:
+		// propagate everything else to all tabs
+		cmd := t.UpdateTabs(msg)
+		return t, cmd
 	}
 
-	updateCmds := t.UpdateTabs(msg)
-	cmds = append(cmds, updateCmds...)
-
-	return t, tea.Batch(cmds...)
+	return t, nil
 }
 
 func (t tui) View() string {
@@ -134,65 +123,43 @@ func (t tui) View() string {
 }
 
 func (t *tui) HandleDefaultView() string {
+	if !t.isInitialized() {
+		return ""
+	}
+
 	renderedTabs := t.RenderTabs()
 
-	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
-	remainingTopBorder := ""
-	if t.width > 0 {
-		rowLength, _ := lipgloss.Size(row)
-		borderStyle := windowStyle.GetBorderStyle()
+	style := lipgloss.NewStyle().
+		MaxHeight(t.height).
+		MaxWidth(t.width)
 
-		remainingTopBorder = lipgloss.NewStyle().Foreground(highlightColor).Render(
-			strings.Repeat(borderStyle.Top, t.width-rowLength-1) + borderStyle.TopRight,
-		)
-	}
-
-	header := ""
-	if t.boundaryToken != nil {
-		header = header + lipgloss.NewStyle().Render(
-			"Session expires at "+
-				t.boundaryToken.ExpirationTime.Local().Format("2006/01/02 15:04:05 MST")+
-				"\n",
-		)
-	}
-
-	header = header + row + remainingTopBorder
-	headerHeight := lipgloss.Height(header) - 1 // ignore last \n
-	contentHeight := t.height - windowStyle.GetVerticalFrameSize() - headerHeight
-	contentWidth := t.width - windowStyle.GetHorizontalFrameSize()
-
-	t.tabs[targetsView].SetSize(contentWidth, contentHeight)
-	t.tabs[connectedView].SetSize(contentWidth, contentHeight)
-	t.tabs[favoriteView].SetSize(contentWidth, contentHeight)
-
-	return lipgloss.JoinVertical(
-		lipgloss.Top,
-		header,
-		windowStyle.
-			Width(contentWidth).
-			Height(contentHeight).
-			Render(
-				t.CurrentTab().View(),
-			),
+	return style.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Top,
+			renderedTabs,
+			windowStyle.
+				// force width here to make sure border is rendered correctly
+				Width(t.width-2).
+				Render(
+					t.CurrentTab().View(),
+				),
+		),
 	)
 }
 
-func (t *tui) RenderTabs() []string {
-	var renderedTabs []string
-
+func (t *tui) RenderTabs() string {
+	out := []string{}
 	for i := range t.tabs {
 		isFirst := i == 0
 		isLast := i == len(t.tabs)-1
 		isActive := i == int(t.state)
 
-		style := inactiveTabStyle
-
+		style := tabStyle
 		if isActive {
-			style = activeTabStyle
+			style = activeTab
 		}
 
-		border, _, _, _, _ := style.GetBorder()
-
+		border := style.GetBorderStyle()
 		switch {
 		case isFirst && isActive:
 			border.BottomLeft = "│"
@@ -202,14 +169,21 @@ func (t *tui) RenderTabs() []string {
 			border.BottomRight = "┴"
 		}
 
-		style = style.Border(border)
-		renderedTabs = append(
-			renderedTabs,
-			style.Render(
-				fmt.Sprintf("%s (%d)", t.tabs[i].Title, len(t.tabs[i].Items())),
-			),
-		)
+		out = append(out, style.Border(border).Render(
+			fmt.Sprintf("%s (%d)", t.tabs[i].Title, len(t.tabs[i].Items())),
+		))
 	}
 
-	return renderedTabs
+	row := lipgloss.JoinHorizontal(lipgloss.Top, out...)
+
+	gap := lipgloss.NewStyle().Foreground(highlight).Render(
+		// Create a gap with the same width as the row, but with the tab border on the right
+		strings.Repeat(tabBorder.Top, max(0, t.width-lipgloss.Width(row)-1)) + tabBorder.TopRight)
+
+	row = lipgloss.JoinHorizontal(lipgloss.Bottom, row, gap)
+	return row
+}
+
+func (t *tui) isInitialized() bool {
+	return t.width != 0 && t.height != 0
 }

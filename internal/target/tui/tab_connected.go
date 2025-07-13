@@ -2,6 +2,7 @@ package tui
 
 import (
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -9,49 +10,49 @@ const (
 	connectedTabName = "Connected"
 )
 
-func (t *tui) HandleConnectedUpdate(msg tea.Msg) (bool, tea.Cmd) {
+func ConnectedUpdate(t targetDelegate, msg tea.Msg, m *list.Model) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, t.connectedKeyMap.binding["reconnect"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				i.session.Terminate(t.ctx, i.task)
+		case key.Matches(msg, t.keyMap.binding["reconnect"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
+				i.session.Terminate(i.task)
 				i.session = nil
-				_, err := i.Connect(t.ctx)
+				_, err := i.Connect()
 				if err != nil {
-					t.SetStateAndMessage(errorView, err.Error())
+					return tea.Sequence(func() tea.Msg { return msgError{err: err} })
 				}
-				return true, nil
+				return nil
 			}
 
-		case key.Matches(msg, t.connectedKeyMap.binding["disconnect"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				i.session.Terminate(t.ctx, i.task)
+		case key.Matches(msg, t.keyMap.binding["disconnect"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
+				i.session.Terminate(i.task)
 				i.session = nil
-				t.CurrentTab().RemoveItem(t.CurrentTab().Index())
-				t.CurrentTab().CursorUp()
+				m.RemoveItem(m.Index())
+				m.CursorUp()
 
-				return true, nil
+				return nil
 			}
 
-		case key.Matches(msg, t.connectedKeyMap.binding["info"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				t.SetStateAndMessage(messageView, i.Info())
-				return true, nil
+		case key.Matches(msg, t.keyMap.binding["info"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
+				return tea.Sequence(func() tea.Msg { return msgInfo{target: i} })
 			}
 
-		case key.Matches(msg, t.connectedKeyMap.binding["favorite"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				t.tabs[favoriteView].InsertItem(len(t.tabs[favoriteView].Items()), i)
-				return true, nil
+		case key.Matches(msg, t.keyMap.binding["favorite"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
+				return tea.Sequence(func() tea.Msg { return msgFavorite{target: i} })
 			}
-
-		// Prioritize our keybinding instead of default
-		case key.Matches(msg, listKeyMap(t.CurrentTab().KeyMap)...):
-			cmd := t.UpdateCurrentTab(msg)
-			return true, cmd
 		}
+
+	case msgConnect:
+		return m.InsertItem(len(m.Items()), msg.target)
+
+	case tea.WindowSizeMsg:
+		m.SetSize(msg.Width, msg.Height)
+		return nil
 	}
 
-	return false, nil
+	return nil
 }

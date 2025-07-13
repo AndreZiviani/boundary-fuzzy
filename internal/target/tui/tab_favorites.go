@@ -11,102 +11,101 @@ const (
 	favoritesTabName = "Favorites"
 )
 
-func (t *tui) HandleFavoritesUpdate(msg tea.Msg) (bool, tea.Cmd) {
+func FavoritesUpdate(t targetDelegate, msg tea.Msg, m *list.Model) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, t.favoriteKeyMap.binding["delete"]):
-			if _, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				t.CurrentTab().RemoveItem(t.CurrentTab().Index())
-				t.CurrentTab().CursorUp()
-				saveFavoriteList(*t.CurrentTab())
-				return true, nil
+		case key.Matches(msg, t.keyMap.binding["delete"]):
+			if _, ok := m.SelectedItem().(*Target); ok {
+				m.RemoveItem(m.Index())
+				m.CursorUp()
+				saveFavoriteList(*m)
+				return nil
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.binding["shell"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				cmd, err := i.Shell(t.ctx, func(err error) tea.Msg {
-					t.SetStateAndMessage(errorView, err.Error())
-					return nil
+		case key.Matches(msg, t.keyMap.binding["shell"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
+				cmd, err := i.Shell(func(err error) tea.Msg {
+					return tea.Sequence(func() tea.Msg { return msgError{err: err} })
 				})
 
 				if err != nil {
-					t.SetStateAndMessage(errorView, err.Error())
-					return true, nil
+					return tea.Sequence(cmd, func() tea.Msg { return msgError{err: err} })
 				}
 
-				return true, tea.Sequence(cmd)
+				return tea.Sequence(cmd)
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.binding["connect"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				_, err := i.Connect(t.ctx)
+		case key.Matches(msg, t.keyMap.binding["connect"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
+				_, err := i.Connect()
 				if err != nil {
-					t.SetStateAndMessage(errorView, err.Error())
-					return true, nil
+					return tea.Sequence(func() tea.Msg { return msgError{err: err} })
 				}
 
-				t.tabs[connectedView].InsertItem(len(t.tabs[connectedView].Items()), i)
-				return true, nil
+				return tea.Sequence(func() tea.Msg { return msgConnect{target: i} })
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.binding["up"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
+		case key.Matches(msg, t.keyMap.binding["up"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
 				var cmds []tea.Cmd
 
-				currentIdx := t.CurrentTab().Index()
+				currentIdx := m.Index()
 				if currentIdx == 0 {
-					return true, nil
+					return nil
 				}
 
-				previous := t.CurrentTab().Items()[currentIdx-1].(*Target)
+				previous := m.Items()[currentIdx-1].(*Target)
 
-				cmd := t.CurrentTab().SetItem(currentIdx-1, i)
+				cmd := m.SetItem(currentIdx-1, i)
 				cmds = append(cmds, cmd)
 
-				cmd = t.CurrentTab().SetItem(currentIdx, previous)
+				cmd = m.SetItem(currentIdx, previous)
 				cmds = append(cmds, cmd)
 
-				saveFavoriteList(*t.CurrentTab())
-				return true, tea.Sequence(cmds...)
+				saveFavoriteList(*m)
+				return tea.Sequence(cmds...)
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.binding["down"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
+		case key.Matches(msg, t.keyMap.binding["down"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
 				var cmds []tea.Cmd
 
-				currentIdx := t.CurrentTab().Index()
-				size := len(t.CurrentTab().Items())
+				currentIdx := m.Index()
+				size := len(m.Items())
 				if currentIdx == size-1 {
-					return true, nil
+					return nil
 				}
 
-				next := t.CurrentTab().Items()[currentIdx+1].(*Target)
+				next := m.Items()[currentIdx+1].(*Target)
 
-				cmd := t.CurrentTab().SetItem(currentIdx+1, i)
+				cmd := m.SetItem(currentIdx+1, i)
 				cmds = append(cmds, cmd)
 
-				cmd = t.CurrentTab().SetItem(currentIdx, next)
+				cmd = m.SetItem(currentIdx, next)
 				cmds = append(cmds, cmd)
 
-				saveFavoriteList(*t.CurrentTab())
-				return true, tea.Sequence(cmds...)
+				saveFavoriteList(*m)
+				return tea.Sequence(cmds...)
 			}
 
-		case key.Matches(msg, t.favoriteKeyMap.binding["info"]):
-			if i, ok := t.CurrentTab().SelectedItem().(*Target); ok {
-				t.SetStateAndMessage(messageView, i.Info())
-				return true, nil
+		case key.Matches(msg, t.keyMap.binding["info"]):
+			if i, ok := m.SelectedItem().(*Target); ok {
+				return tea.Sequence(func() tea.Msg { return msgInfo{target: i} })
 			}
-
-			// Prioritize our keybinding instead of default
-		case key.Matches(msg, listKeyMap(t.CurrentTab().KeyMap)...):
-			cmd := t.UpdateCurrentTab(msg)
-			return true, cmd
 		}
+
+	case msgFavorite:
+		cmd := m.InsertItem(len(m.Items()), msg.target)
+		saveFavoriteList(*m)
+		return tea.Sequence(cmd)
+
+	case tea.WindowSizeMsg:
+		m.SetSize(msg.Width, msg.Height)
+		return nil
 	}
 
-	return false, nil
+	return nil
 }
 
 func getTarget(id string, targets []list.Item) list.Item {

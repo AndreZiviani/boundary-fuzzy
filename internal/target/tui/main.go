@@ -49,14 +49,14 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		bindingFavorite.name: bindingFavorite.binding,
 		bindingInfo.name:     bindingInfo.binding,
 		bindingRefresh.name:  bindingRefresh.binding,
-	})
+	}, TargetsUpdate, nil)
 
 	connectedList, connectedKeyMap := NewList(connectedTabName, connectedView, []list.Item{}, map[string]key.Binding{
 		bindingDisconnect.name: bindingDisconnect.binding,
 		bindingReconnect.name:  bindingReconnect.binding,
 		bindingInfo.name:       bindingInfo.binding,
 		bindingFavorite.name:   bindingFavorite.binding,
-	})
+	}, ConnectedUpdate, nil)
 
 	favoriteList, favoriteKeyMap := NewList(favoritesTabName, favoriteView, []list.Item{}, map[string]key.Binding{
 		bindingShell.name:        bindingShell.binding,
@@ -65,7 +65,7 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		bindingFavoriteUp.name:   bindingFavoriteUp.binding,
 		bindingFavoriteDown.name: bindingFavoriteDown.binding,
 		bindingInfo.name:         bindingInfo.binding,
-	})
+	}, FavoritesUpdate, nil)
 
 	t := newTui(ctx, TuiInput{
 		BoundaryClient: boundaryClient,
@@ -83,7 +83,7 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(t, tea.WithAltScreen(), tea.WithFilter(filter))
+	p := tea.NewProgram(t, tea.WithAltScreen(), tea.WithFilter(filter), tea.WithMouseCellMotion())
 
 	if _, err := p.Run(); err != nil {
 		fmt.Println("Error running program:", err)
@@ -91,14 +91,26 @@ func Tui(ctx context.Context, targetListResult *targets.TargetListResult, bounda
 	}
 }
 
-func NewList(name string, view sessionState, items []list.Item, bindings map[string]key.Binding) (list.Model, *DelegateKeyMap) {
-	delegate, keyMap := NewDelegate(bindings, view)
+func NewList(name string, view sessionState, items []list.Item, bindings map[string]key.Binding, updater delegateUpdateFunc, renderer delegateRenderFunc) (list.Model, *DelegateKeyMap) {
+	delegate, keyMap := NewDelegate(bindings, view, updater, renderer)
 	customList := list.New(items, delegate, 0, 0)
 	customList.Title = name
 	customList.AdditionalShortHelpKeys = keyMap.ShortHelp
 	customList.AdditionalFullHelpKeys = keyMap.ShortHelp
 	customList.SetShowTitle(false)
 	customList.DisableQuitKeybindings()
+
+	// remove some keys from the default keymap
+	PrevPage := key.NewBinding(
+		key.WithKeys("left", "h", "pgup"),
+		key.WithHelp("←/h/pgup", "prev page"),
+	)
+	NextPage := key.NewBinding(
+		key.WithKeys("right", "l", "pgdown"),
+		key.WithHelp("→/l/pgdn", "next page"),
+	)
+	customList.KeyMap.PrevPage = PrevPage
+	customList.KeyMap.NextPage = NextPage
 
 	return customList, keyMap
 }

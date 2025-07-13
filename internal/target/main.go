@@ -3,22 +3,9 @@ package target
 import (
 	"github.com/AndreZiviani/boundary-fuzzy/internal/client"
 	"github.com/AndreZiviani/boundary-fuzzy/internal/target/tui"
-	"github.com/hashicorp/boundary/api"
 	"github.com/hashicorp/boundary/api/targets"
 	"github.com/urfave/cli/v2"
 )
-
-type ddList struct {
-	ScopeName      string
-	ScopeID        string
-	boundaryClient *api.Client
-	targetClient   *targets.Client
-}
-
-type Connect struct {
-	boundaryClient *api.Client
-	targetClient   *targets.Client
-}
 
 func Command() *cli.Command {
 	command := cli.Command{

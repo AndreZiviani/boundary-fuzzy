@@ -41,36 +41,33 @@ func (a *Auth) OIDCLogin(ctx context.Context, methodId string) (*authtokens.Auth
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for {
-			select {
-			case <-time.After(1500 * time.Millisecond):
-				result, err = a.authClient.Authenticate(ctx, methodId, "token", map[string]any{
-					"token_id": startResp.TokenId,
-				})
-				if err != nil {
-					if apiErr := api.AsServerError(err); apiErr != nil {
-						fmt.Println(apiErr)
-						return
-					}
-					fmt.Println(err)
+		for range time.NewTicker(1500 * time.Millisecond).C {
+			result, err = a.authClient.Authenticate(ctx, methodId, "token", map[string]any{
+				"token_id": startResp.TokenId,
+			})
+			if err != nil {
+				if apiErr := api.AsServerError(err); apiErr != nil {
+					fmt.Println(apiErr)
 					return
 				}
-				if result.GetResponse().StatusCode() == http.StatusAccepted {
-					// Nothing yet -- circle around.
-					continue
-				}
-
+				fmt.Println(err)
 				return
 			}
+			if result.GetResponse().StatusCode() == http.StatusAccepted {
+				// Nothing yet -- circle around.
+				continue
+			}
+
+			return
 		}
 	}()
 	wg.Wait()
 
 	if watchCode != 0 {
-		return nil, fmt.Errorf("Error watching for code: %d", watchCode)
+		return nil, fmt.Errorf("error watching for code: %d", watchCode)
 	}
 	if result == nil {
-		return nil, fmt.Errorf("No response from the server")
+		return nil, fmt.Errorf("no response from the server")
 	}
 
 	_ = keyring.SaveTokenToKeyring(result)

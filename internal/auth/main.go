@@ -51,7 +51,7 @@ func (a *Auth) getPrimaryAuthMethodId(ctx context.Context) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Primary auth method not found in global scope")
+	return "", fmt.Errorf("primary auth method not found in global scope")
 }
 
 func (a *Auth) Execute(c *cli.Context) error {
@@ -92,12 +92,12 @@ func Login(ctx context.Context, force bool) (string, error) {
 
 	case strings.HasPrefix(pri, globals.PasswordAuthMethodPrefix):
 		// todo
-		return "", fmt.Errorf("Password login is not implemented")
+		return "", fmt.Errorf("password login is not implemented")
 	case strings.HasPrefix(pri, globals.LdapAuthMethodPrefix):
 		// todo
 		return "", fmt.Errorf("LDAP login is not implemented")
 	}
 
-	return "", fmt.Errorf("Unknown auth method type")
+	return "", fmt.Errorf("unknown auth method type")
 
 }

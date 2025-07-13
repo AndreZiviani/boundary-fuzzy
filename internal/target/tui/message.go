@@ -7,6 +7,25 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+type msgError struct {
+	err error
+}
+
+type msgConnect struct {
+	target *Target
+}
+
+type msgFavorite struct {
+	target *Target
+}
+
+type msgInfo struct {
+	target *Target
+}
+
+type msgRefresh struct {
+}
+
 func (t tui) messageUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case tea.KeyMsg:

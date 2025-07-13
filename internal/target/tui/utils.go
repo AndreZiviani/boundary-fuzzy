@@ -2,12 +2,10 @@ package tui
 
 import (
 	"net"
-	"reflect"
 	"regexp"
 	"strings"
 
 	"github.com/AndreZiviani/boundary-fuzzy/internal/config"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hashicorp/boundary/globals"
@@ -15,17 +13,7 @@ import (
 
 // This regular expression is used to find all instances of square brackets within a string.
 // This regular expression is used to remove the square brackets from an IPv6 address.
-var squareBrackets = regexp.MustCompile("\\[|\\]")
-
-func listKeyMap(keymap list.KeyMap) []key.Binding {
-	var bindings []key.Binding
-	v := reflect.ValueOf(keymap)
-	for i := 0; i < v.NumField(); i++ {
-		bindings = append(bindings, v.Field(i).Interface().(key.Binding))
-	}
-
-	return bindings
-}
+var squareBrackets = regexp.MustCompile(`[|]`)
 
 func (t *tui) InFilterState() bool {
 	return t.CurrentTab().FilterState() == list.Filtering
@@ -62,7 +50,7 @@ func (t *tui) GoNextTab() {
 	}
 }
 
-func (t *tui) UpdateTabs(msg tea.Msg) []tea.Cmd {
+func (t *tui) UpdateTabs(msg tea.Msg) tea.Cmd {
 	cmds := make([]tea.Cmd, 0)
 
 	for _, tab := range []sessionState{targetsView, connectedView, favoriteView} {
@@ -71,13 +59,13 @@ func (t *tui) UpdateTabs(msg tea.Msg) []tea.Cmd {
 		cmds = append(cmds, cmd)
 	}
 
-	return cmds
+	return tea.Batch(cmds...)
 }
 func (t *tui) terminateAllSessions() {
 	for _, item := range t.tabs[connectedView].Items() {
 		target := item.(*Target)
 		if target.session == nil {
-			target.session.Terminate(t.ctx, target.task)
+			target.session.Terminate(target.task)
 		}
 	}
 }
