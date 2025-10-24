@@ -15,7 +15,7 @@ import (
 func NewBoundaryClient(ctx context.Context) (*api.Client, *authtokens.AuthToken, error) {
 	boundaryAddr := os.Getenv("BOUNDARY_ADDR")
 	if boundaryAddr == "" {
-		return nil, nil, fmt.Errorf("Environment variable BOUNDARY_ADDR is not set")
+		return nil, nil, fmt.Errorf("environment variable BOUNDARY_ADDR is not set")
 	}
 
 	config, _ := api.DefaultConfig()
