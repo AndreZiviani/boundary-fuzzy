@@ -82,6 +82,9 @@ func (t *Target) Connect() (*exec.Cmd, error) {
 		case 6379:
 			cmd = NewRedisCommand("127.0.0.1", t.session.Port, t.session.Credentials)
 
+		case 9440:
+			cmd = NewClickHouseCommand("127.0.0.1", t.session.Port, t.session.Credentials)
+
 		default:
 			// do nothing, just connect to target
 		}

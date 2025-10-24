@@ -61,3 +61,25 @@ func NewRedisCommand(host string, port int, credentials []*targets.SessionCreden
 
 	return cmd
 }
+
+func NewClickHouseCommand(host string, port int, credentials []*targets.SessionCredential) *exec.Cmd {
+	args := []string{
+		"--secure",
+		"--accept-invalid-certificate",
+		"--host", host,
+		"--port", strconv.Itoa(port),
+	}
+
+	if len(credentials) > 0 {
+		args = append(args, "--user", credentials[0].Secret.Decoded["username"].(string))
+	}
+
+	cmd := exec.Command("clickhouse-client", args...)
+	cmd.Env = os.Environ()
+
+	if len(credentials) > 0 {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("CLICKHOUSE_PASSWORD=%s", credentials[0].Secret.Decoded["password"]))
+	}
+
+	return cmd
+}
